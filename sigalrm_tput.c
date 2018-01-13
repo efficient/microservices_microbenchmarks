@@ -8,14 +8,10 @@
 #include <stdlib.h>
 
 static volatile bool uncaught = true;
-static volatile long long timestamp;
 
 static void sigalrm(int signum) {
 	(void) signum;
 
-	int errnom = errno;
-	timestamp = nsnow();
-	errno = errnom;
 	uncaught = false;
 }
 
@@ -44,8 +40,8 @@ int main(void) {
 	for(int trial = 0; trial < TRIALS; ++trial) {
 		long long ts = nsnow();
 		while(uncaught);
+		running[trial] = nsnow() - ts;
 		uncaught = true;
-		running[trial] = timestamp - ts;
 	}
 
 	clock.it_value.tv_usec = 0;
