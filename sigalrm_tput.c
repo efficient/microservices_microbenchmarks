@@ -28,13 +28,13 @@ static void sigalrm(int signum) {
 }
 
 int main(void) {
-	static const suseconds_t LIMIT = 1; // us
-	static const int TRIALS        = 1000;
+	static const suseconds_t LIMIT = 10; // us
+	static const int TRIALS        = 1000000;
 
 	struct sigaction handler = {
 		.sa_handler = sigalrm,
 	};
-	if(sigaction(SIGVTALRM, &handler, NULL)) {
+	if(sigaction(SIGALRM, &handler, NULL)) {
 		perror("sigaction()");
 		return errno;
 	}
@@ -43,7 +43,7 @@ int main(void) {
 		.it_interval.tv_usec = LIMIT,
 		.it_value.tv_usec    = LIMIT,
 	};
-	if(setitimer(ITIMER_VIRTUAL, &clock, NULL)) {
+	if(setitimer(ITIMER_REAL, &clock, NULL)) {
 		perror("setitimer()");
 		return errno;
 	}
@@ -57,7 +57,7 @@ int main(void) {
 	}
 
 	clock.it_value.tv_usec = 0;
-	if(setitimer(ITIMER_VIRTUAL, &clock, NULL)) {
+	if(setitimer(ITIMER_REAL, &clock, NULL)) {
 		perror("setitimer()");
 		return errno;
 	}
