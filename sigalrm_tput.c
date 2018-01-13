@@ -3,6 +3,7 @@
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 static inline long long ns(const struct timespec *split) {
@@ -48,12 +49,12 @@ int main(void) {
 		return errno;
 	}
 
-	long long running = 0;
+	long long *running = malloc(TRIALS * sizeof *running);
 	for(int trial = 0; trial < TRIALS; ++trial) {
 		long long ts = nsnow();
 		while(uncaught);
 		uncaught = true;
-		running += timestamp - ts;
+		running[trial] = timestamp - ts;
 	}
 
 	clock.it_value.tv_usec = 0;
@@ -62,7 +63,9 @@ int main(void) {
 		return errno;
 	}
 
-	printf("Avg %.03f us\n", running / TRIALS / 1000.0);
+	for(int trial = 0; trial < TRIALS; ++trial)
+		printf("%.03f\n", running[trial] / 1000.0);
+	free(running);
 
 	return 0;
 }
