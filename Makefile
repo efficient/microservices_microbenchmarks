@@ -1,4 +1,7 @@
+override CPPFLAGS := $(CPPFLAGS)
 override CFLAGS := -O2 -std=c99 -Wall -Wextra -Werror $(CFLAGS)
+override LDFLAGS := $(LDFLAGS)
+override LDLIBS := $(LDLIBS)
 
 .PHONY: all
 all: kill_tput sigalrm_tput
