@@ -27,6 +27,7 @@ int main(void) {
 		return errno;
 	}
 
+	long long runtime = nsnow();
 	struct itimerval clock = {
 		.it_interval.tv_usec = LIMIT,
 		.it_value.tv_usec    = LIMIT,
@@ -50,9 +51,13 @@ int main(void) {
 		return errno;
 	}
 
+	runtime = nsnow() - runtime;
 	for(int trial = 0; trial < TRIALS; ++trial)
 		printf("%.03f\n", running[trial] / 1000.0);
 	free(running);
+
+	putchar('\n');
+	printf("Tput: %f\n", TRIALS / (runtime / 1000000000.0));
 
 	return 0;
 }
