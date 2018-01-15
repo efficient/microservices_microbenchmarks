@@ -30,35 +30,31 @@ int main(void) {
 	long long runtime = nsnow();
 
 #ifndef STUB_TIMER
-	struct itimerval clock = {
-		.it_interval.tv_usec = LIMIT,
+	struct itimerval tout = {
 		.it_value.tv_usec    = LIMIT,
 	};
-	if(setitimer(ITIMER_REAL, &clock, NULL)) {
-		perror("setitimer()");
-		return errno;
-	}
+	struct itimerval notout = {0};
 #endif
 
 	long long *running = malloc(TRIALS * sizeof *running);
 	for(int trial = 0; trial < TRIALS; ++trial) {
 		long long ts = nsnow();
 #ifndef STUB_TIMER
+		if(setitimer(ITIMER_REAL, &tout, NULL)) {
+			perror("setitimer()");
+			return errno;
+		}
 		while(uncaught);
+		if(setitimer(ITIMER_REAL, &notout, NULL)) {
+			perror("setitimer()");
+			return errno;
+		}
 #else
 		while(nsnow() - ts < LIMIT * 1000);
 #endif
 		running[trial] = nsnow() - ts;
 		uncaught = true;
 	}
-
-#ifndef STUB_TIMER
-	clock.it_value.tv_usec = 0;
-	if(setitimer(ITIMER_REAL, &clock, NULL)) {
-		perror("setitimer()");
-		return errno;
-	}
-#endif
 
 	runtime = nsnow() - runtime;
 	for(int trial = 0; trial < TRIALS; ++trial)
