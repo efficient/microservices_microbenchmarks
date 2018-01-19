@@ -77,7 +77,7 @@ int main(void) {
 			perror("setitimer(tout)");
 			return errno;
 		}
-		uservice(expected * 1000);
+		uservice(delay * 1000);
 		if(setitimer(ITIMER_REAL, &notout, NULL)) {
 			perror("setitimer(notout)");
 			return errno;
