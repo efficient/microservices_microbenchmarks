@@ -60,8 +60,12 @@ int main(void) {
 
 	struct itimerval tout = {
 		.it_value.tv_usec = LIMIT,
+		.it_interval.tv_usec = LIMIT,
 	};
-	struct itimerval notout = {0};
+	if(setitimer(ITIMER_REAL, &tout, NULL)) {
+		perror("setitimer(tout)");
+		return errno;
+	}
 
 	int bounties = 0;
 	if(getcontext(&restore)) {
@@ -73,15 +77,13 @@ int main(void) {
 		if((expected = delay >= LIMIT))
 			++bounties;
 
-		if(setitimer(ITIMER_REAL, &tout, NULL)) {
-			perror("setitimer(tout)");
-			return errno;
-		}
 		uservice(delay * 1000);
-		if(setitimer(ITIMER_REAL, &notout, NULL)) {
-			perror("setitimer(notout)");
-			return errno;
-		}
+	}
+
+	tout.it_value.tv_usec = 0;
+	if(setitimer(ITIMER_REAL, &tout, NULL)) {
+		perror("setitimer(notout)");
+		return errno;
 	}
 
 	printf("Caught %d of %d CPU hogs\n", kills, bounties);
