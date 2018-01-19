@@ -15,7 +15,6 @@ static void uservice(int duration) {
 	while(nsnow() - ts < duration);
 }
 
-static volatile long deadline;
 static volatile bool expected;
 static int kills;
 static ucontext_t restore;
@@ -24,21 +23,6 @@ static volatile int trial;
 static void sigalrm(int signum, siginfo_t *siginfo, void *sigctxt) {
 	(void) signum;
 	(void) siginfo;
-
-	int errbak = errno;
-	long time = uscpu();
-	if(time < deadline) {
-		struct itimerval defer = {
-			.it_value.tv_usec = deadline - time,
-		};
-		if(setitimer(ITIMER_REAL, &defer, NULL)) {
-			perror("setitimer(defer)");
-			exit(errno);
-		}
-		errno = errbak;
-		return;
-	}
-	errno = errbak;
 
 	assert(expected);
 	++kills;
@@ -93,7 +77,6 @@ int main(void) {
 			perror("setitimer(tout)");
 			return errno;
 		}
-		deadline = uscpu() + LIMIT;
 		uservice(expected * 1000);
 		if(setitimer(ITIMER_REAL, &notout, NULL)) {
 			perror("setitimer(notout)");
