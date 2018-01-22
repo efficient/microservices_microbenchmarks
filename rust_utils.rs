@@ -1,9 +1,11 @@
 #[no_mangle]
 pub fn call(fun: extern "C" fn()) -> bool {
 	use std::panic::catch_unwind;
-	use std::sys_common::cleanup;
+	use std::process::exit;
 
-	catch_unwind(|| fun()).is_ok()
+	let success = catch_unwind(|| fun()).is_ok();
+	// This will call std::sys_common::cleanup for us.
+	exit(success as i32);
 }
 
 #[no_mangle]
