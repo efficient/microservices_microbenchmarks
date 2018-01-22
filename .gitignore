@@ -1,7 +1,10 @@
 /kill_tput
+/launcher
 /minimal
 /preempt
 /rust_test
 /sigalrm_tput
 
+*.o
 *.rlib
+*.so
