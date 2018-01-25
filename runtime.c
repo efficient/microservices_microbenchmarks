@@ -6,12 +6,12 @@
 
 static const char *ENTRY_POINT = "main";
 
-struct libfun {
+struct libfunny {
 	void *lib;
 	void (*fun)(void);
 };
 
-const char *dl_load(struct libfun *exec, const char *sofile) {
+const char *dl_load(struct libfunny *exec, const char *sofile) {
 	exec->lib = dlopen(sofile, RTLD_NOW);
 	if(!exec->lib)
 		return dlerror();
@@ -23,8 +23,8 @@ const char *dl_load(struct libfun *exec, const char *sofile) {
 	return NULL;
 }
 
-void dl_unload(struct libfun *exec) {
-	dlclose(exec->lib);
+void dl_unload(struct libfunny exec) {
+	dlclose(exec.lib);
 }
 
 #endif
