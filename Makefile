@@ -16,23 +16,10 @@ launcher: private LDLIBS += -ldl
 launcher: private RUSTFLAGS += -L.
 launcher: runtime.rs libruntime.a
 
-libstd.so:
-ifeq ($(wildcard $(shell $(RUSTC) --print sysroot)/lib/libstd-*.so),)
-	ln -s $(wildcard $(shell $(RUSTC) --print sysroot)/lib/$(shell $(CC) -v 2>&1 | sed -n 's/Target: //p')/libstd-*.so) $@
-else
-	ln -sf $(wildcard $(shell $(RUSTC) --print sysroot)/lib/libstd-*.so) $@
-endif
-
 minimal: private CPPFLAGS += -D_GNU_SOURCE
 
 preempt: private CPPFLAGS += -D_GNU_SOURCE
 preempt: time_utils.h
-
-rust_test: private LDFLAGS += -Wl,-u,unwind
-rust_test: private RUSTFLAGS += --extern rust_utils=librust_utils.rlib
-rust_test: librust_utils.rlib
-
-rust_utils.o: rust_utils.h
 
 sigalrm_tput: private CPPFLAGS += -D_POSIX_C_SOURCE=199309L
 sigalrm_tput: time_utils.h
@@ -42,9 +29,6 @@ sigalrm_tput: time_utils.h
 
 lib%.a: %.o
 	$(AR) rs $@ $^
-
-lib%.rlib: %.rs
-	$(RUSTC) --crate-type lib $(RUSTFLAGS) -Clink-args="$(LDFLAGS)" $< $(LDLIBS)
 
 lib%.so: %.rs
 	$(RUSTC) --crate-type cdylib $(RUSTFLAGS) -Clink-args="$(LDFLAGS)" $< $(LDLIBS)
