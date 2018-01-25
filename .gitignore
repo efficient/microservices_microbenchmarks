@@ -5,6 +5,7 @@
 /rust_test
 /sigalrm_tput
 
+*.a
 *.o
 *.rlib
 *.so

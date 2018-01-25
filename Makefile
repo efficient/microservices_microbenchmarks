@@ -12,9 +12,9 @@ all: kill_tput minimal preempt rust_test sigalrm_tput
 kill_tput: private CPPFLAGS += -D_POSIX_C_SOURCE=199309L
 kill_tput: time_utils.h
 
-launcher: private LDFLAGS += -Wl,-u,unwind
 launcher: private LDLIBS += -ldl
-launcher: rust_utils.o libstd.so
+launcher: private RUSTFLAGS += -L.
+launcher: runtime.rs libruntime.a
 
 libstd.so:
 ifeq ($(wildcard $(shell $(RUSTC) --print sysroot)/lib/libstd-*.so),)
@@ -40,8 +40,8 @@ sigalrm_tput: time_utils.h
 %: %.rs
 	$(RUSTC) $(RUSTFLAGS) -Clink-args="$(LDFLAGS)" $< $(LDLIBS)
 
-%.o: %.rs
-	$(RUSTC) --emit obj --crate-type lib $(RUSTFLAGS) $<
+lib%.a: %.o
+	$(AR) rs $@ $^
 
 lib%.rlib: %.rs
 	$(RUSTC) --crate-type lib $(RUSTFLAGS) -Clink-args="$(LDFLAGS)" $< $(LDLIBS)
