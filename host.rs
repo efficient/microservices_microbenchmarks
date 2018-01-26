@@ -5,6 +5,7 @@ mod time;
 
 use ipc::SMem;
 use job::Job;
+use job::args;
 use job::joblist;
 use std::process::exit;
 use time::nsnow;
@@ -73,17 +74,4 @@ fn invoke(jobs: &mut Box<[Job<String>]>, comms: &SMem<i64>) -> Result<(), String
 	}
 
 	Ok(())
-}
-
-fn args() -> Result<(String, usize), (i32, String)> {
-	use std::env::args;
-
-	let mut args = args();
-	let prog = args.next().unwrap_or(String::from("<program>"));
-	let usage = format!("USAGE: {} <svcname> [numjobs]", prog);
-
-	Ok((
-		args.next().ok_or((1, usage))?,
-		args.next().unwrap_or(String::from("1")).parse().or(Err((2, String::from("[numjobs], if provided, must be a nonnegative integer"))))?,
-	))
 }

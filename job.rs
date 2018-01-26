@@ -21,3 +21,16 @@ pub fn joblist<T, F: FnMut(&str) -> T>(svcnames: &mut F, numjobs: usize) -> Box<
 		},
 	}
 }
+
+pub fn args() -> Result<(String, usize), (i32, String)> {
+	use std::env::args;
+
+	let mut args = args();
+	let prog = args.next().unwrap_or(String::from("<program>"));
+	let usage = format!("USAGE: {} <svcname> [numjobs]", prog);
+
+	Ok((
+		args.next().ok_or((1, usage))?,
+		args.next().unwrap_or(String::from("1")).parse().or(Err((2, String::from("[numjobs], if provided, must be a nonnegative integer"))))?,
+	))
+}
