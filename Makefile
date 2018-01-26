@@ -24,6 +24,14 @@ preempt: time_utils.h
 sigalrm_tput: private CPPFLAGS += -D_POSIX_C_SOURCE=199309L
 sigalrm_tput: time_utils.h
 
+.PHONY: clean
+clean:
+	$(RM) $(filter-out $(shell grep -H ^/ $(shell git ls-files .gitignore '*/.gitignore') | sed 's/\.gitignore:\///'),$(shell git clean -nX | cut -d" " -f3-))
+
+.PHONY: distclean
+distclean:
+	git clean -fX
+
 %: %.rs
 	$(RUSTC) $(RUSTFLAGS) -Clink-args="$(LDFLAGS)" $< $(LDLIBS)
 
