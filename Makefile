@@ -12,9 +12,9 @@ all: kill_tput minimal preempt rust_test sigalrm_tput
 kill_tput: private CPPFLAGS += -D_POSIX_C_SOURCE=199309L
 kill_tput: time_utils.h
 
-minimal: private CPPFLAGS += -D_DEFAULT_SOURCE -D_GNU_SOURCE
+minimal: private CPPFLAGS += -D_GNU_SOURCE
 
-preempt: private CPPFLAGS += -D_DEFAULT_SOURCE -D_GNU_SOURCE
+preempt: private CPPFLAGS += -D_GNU_SOURCE
 preempt: time_utils.h
 
 rust_test: private LDFLAGS += -Wl,-u,unwind
