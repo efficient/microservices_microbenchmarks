@@ -1,10 +1,16 @@
 override CPPFLAGS := $(CPPFLAGS)
-override CFLAGS := -O2 -std=c99 -Wall -Wextra -Werror $(CFLAGS)
+override CFLAGS := $(if $(NOPTS),-Og,-O2) -g -std=c99 -Wall -Wextra -Werror $(CFLAGS)
 override LDFLAGS := $(LDFLAGS)
 override LDLIBS := $(LDLIBS)
-override RUSTFLAGS := -O -Dwarnings $(RUSTFLAGS)
+override RUSTFLAGS := $(if $(NOPTS),,-O) -g -Dwarnings $(RUSTFLAGS)
 
 RUSTC := rustc
+
+ifdef NOPTS
+$(warning \vvvvvvvvvvvvvvvvvvvvvvvvvvvvv/)
+$(warning = PRODUCING UNOPTIMIZED BUILD =)
+$(warning /^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\)
+endif
 
 .PHONY: all
 all: kill_tput minimal preempt rust_test sigalrm_tput
