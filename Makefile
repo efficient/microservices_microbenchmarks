@@ -15,6 +15,9 @@ endif
 .PHONY: all
 all: kill_tput minimal preempt rust_test sigalrm_tput
 
+host: private RUSTFLAGS += -L. --cfg 'feature="invoke_$(INVOCATION)"'
+host: ipc.rs libipc.a job.rs
+
 kill_tput: private CPPFLAGS += -D_POSIX_C_SOURCE=199309L
 kill_tput: time_utils.h
 
