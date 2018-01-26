@@ -1,11 +1,13 @@
 #[allow(dead_code)]
 mod ipc;
 mod job;
+mod time;
 
 use ipc::SMem;
 use job::Job;
 use job::joblist;
 use std::process::exit;
+use time::nsnow;
 
 const USERVICE_MASK: &str = "0x4";
 
@@ -29,6 +31,10 @@ fn main() {
 		eprintln!("While invoking microservice: {}", or);
 		exit(4);
 	}
+
+	for job in &*jobs {
+		println!("{}", job.invocation_latency as f64 / 1_000.0);
+	}
 }
 
 #[cfg(not(feature = "invoke_forkexec"))]
@@ -39,7 +45,7 @@ fn invoke(jobs: &mut Box<[Job]>, comms: &SMem<i64>) -> Result<(), String> {
 	use std::process::Command;
 	use std::process::Stdio;
 
-	for job in &**jobs {
+	for job in &mut **jobs {
 		let mut process = Command::new("taskset");
 		process.arg(USERVICE_MASK).arg(&job.uservice_name).arg(format!("{}", comms.id()));
 		if cfg!(debug_assertions) {
@@ -48,7 +54,9 @@ fn invoke(jobs: &mut Box<[Job]>, comms: &SMem<i64>) -> Result<(), String> {
 			process.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
 		};
 
+		let ts = nsnow().unwrap();
 		let code = process.status().map_err(|msg| format!("{}: {}", job.uservice_name, msg))?;
+		job.invocation_latency = **comms - ts;
 
 		if ! code.success() {
 			Err(if cfg!(debug_assertions) {
