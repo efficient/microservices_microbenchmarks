@@ -23,7 +23,7 @@ kill_tput: time_utils.h
 
 launcher: private LDLIBS += -ldl
 launcher: private RUSTFLAGS += -L.
-launcher: runtime.rs libruntime.a
+launcher: job.rs runtime.rs libruntime.a
 
 minimal: private CPPFLAGS += -D_GNU_SOURCE
 

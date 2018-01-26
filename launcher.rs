@@ -1,14 +1,40 @@
+mod job;
+#[allow(dead_code)]
 mod runtime;
+mod time;
 
+use job::args;
+use job::joblist;
 use runtime::LibFun;
+use std::ffi::CString;
 use std::process::exit;
+use time::nsnow;
 
 fn main() {
-	for _ in 0..2 {
-		let fun = LibFun::new("test").unwrap_or_else(|or| {
+	let (svcname, numjobs) = args().unwrap_or_else(|(retcode, errmsg)| {
+		eprintln!("{}", errmsg);
+		exit(retcode);
+	});
+	let mut jobs = joblist(&mut |index| CString::new(format!("{}{}.so", svcname, index)).unwrap(), numjobs);
+
+	for job in &mut *jobs {
+		let fun = LibFun::new(&job.uservice_path).unwrap_or_else(|or| {
 			eprintln!("{}", or);
 			exit(2);
 		});
-		fun();
+
+		let ts = nsnow().unwrap();
+		let finished = fun();
+		job.invocation_latency = nsnow().unwrap() - ts;
+
+		if ! finished {
+			let path = job.uservice_path.to_str().unwrap_or("");
+
+			eprintln!("While invoking microservice: child '{}' died or was killed", path);
+		}
+	}
+
+	for job in &*jobs {
+		println!("{}", job.invocation_latency as f64 / 1_000.0);
 	}
 }

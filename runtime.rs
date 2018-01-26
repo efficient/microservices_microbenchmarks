@@ -13,13 +13,12 @@ pub struct LibFun {
 }
 
 impl LibFun {
-	pub fn new(libname: &str) -> Result<Self, String> {
+	pub fn new(sofile: &CString) -> Result<Self, String> {
 		let mut exec = LibFunny {
 			lib: null(),
 			fun: null(),
 		};
-		let sofile = format!("./lib{}.so", libname);
-		let sofile = CString::new(&*sofile).map_err(|or| format!("{}", or))?;
+
 		let errmsg = unsafe {
 			dl_load(&mut exec, sofile.as_ptr())
 		};
@@ -44,6 +43,13 @@ impl LibFun {
 
 			Err(String::from(msg))
 		}
+	}
+
+	pub fn new_from_str(libname: &str) -> Result<Self, String> {
+		let sofile = format!("./lib{}.so", libname);
+		let sofile = CString::new(&*sofile).map_err(|or| format!("{}", or))?;
+
+		Self::new(&sofile)
 	}
 }
 
