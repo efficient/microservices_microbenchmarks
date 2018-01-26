@@ -1,5 +1,6 @@
 use std::ffi::CStr;
 use std::ffi::CString;
+use std::mem::transmute;
 use std::ops::Deref;
 use std::os::raw::c_char;
 use std::os::raw::c_void;
@@ -15,7 +16,7 @@ impl LibFun {
 	pub fn new(libname: &str) -> Result<Self, String> {
 		let mut exec = LibFunny {
 			lib: null(),
-			fun: ether,
+			fun: null(),
 		};
 		let sofile = format!("./lib{}.so", libname);
 		let sofile = CString::new(&*sofile).map_err(|or| format!("{}", or))?;
@@ -24,9 +25,16 @@ impl LibFun {
 		};
 
 		if errmsg.is_null() {
+			debug_assert!(! exec.lib.is_null());
+			debug_assert!(! exec.fun.is_null());
+
+			let fun: fn() = unsafe {
+				transmute(exec.fun)
+			};
+
 			Ok(LibFun {
 				lib: exec.lib,
-				fun: Box::new(move || catch_unwind(exec.fun).is_ok()),
+				fun: Box::new(move || catch_unwind(fun).is_ok()),
 			})
 		} else {
 			let msg = unsafe {
@@ -44,7 +52,7 @@ impl Drop for LibFun {
 		unsafe {
 			dl_unload(LibFunny {
 				lib: self.lib,
-				fun: ether,
+				fun: null(),
 			});
 		}
 	}
@@ -61,16 +69,11 @@ impl Deref for LibFun {
 #[repr(C)]
 struct LibFunny {
 	lib: *const c_void,
-	fun: fn(),
+	fun: *const c_void,
 }
 
-#[allow(improper_ctypes)]
 #[link(name = "runtime")]
 extern "C" {
 	fn dl_load(exec: *mut LibFunny, sofile: *const c_char) -> *const c_char;
 	fn dl_unload(exec: LibFunny);
-}
-
-fn ether() {
-	unreachable!();
 }
