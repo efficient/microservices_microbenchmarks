@@ -4,6 +4,7 @@
 /minimal
 /preempt
 /sigalrm_tput
+/test
 
 *.a
 *.o

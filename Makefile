@@ -33,6 +33,9 @@ preempt: time_utils.h
 sigalrm_tput: private CPPFLAGS += -D_POSIX_C_SOURCE=199309L
 sigalrm_tput: time_utils.h
 
+test: private RUSTFLAGS += -L.
+test: ipc.rs libipc.a time.rs
+
 .PHONY: clean
 clean:
 	$(RM) $(filter-out $(shell grep -H ^/ $(shell git ls-files .gitignore '*/.gitignore') | sed 's/\.gitignore:\///'),$(shell git clean -nX | cut -d" " -f3-))
@@ -48,4 +51,4 @@ lib%.a: %.o
 	$(AR) rs $@ $^
 
 lib%.so: %.rs
-	$(RUSTC) --crate-type cdylib $(RUSTFLAGS) -Clink-args="$(LDFLAGS)" $< $(LDLIBS)
+	$(RUSTC) --crate-type cdylib --cfg 'feature="no_mangle_main"' $(RUSTFLAGS) -Clink-args="$(LDFLAGS)" $< $(LDLIBS)
