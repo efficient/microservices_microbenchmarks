@@ -17,7 +17,7 @@ fn main() {
 		exit(retcode);
 	});
 
-	let mut jobs = joblist(&svcname, numjobs);
+	let mut jobs = joblist(&mut |index| format!("{}{}", svcname, index), numjobs);
 	let comm_handles = if cfg!(feature = "invoke_forkexec") {
 		SMem::new(0i64).unwrap_or_else(|error| {
 			eprintln!("Initializing shared memory: {}", error);
@@ -41,13 +41,13 @@ fn main() {
 compile_error!("Must select an invoke_* personality via '--feature' or '--cfg feature='!");
 
 #[cfg(feature = "invoke_forkexec")]
-fn invoke(jobs: &mut Box<[Job]>, comms: &SMem<i64>) -> Result<(), String> {
+fn invoke(jobs: &mut Box<[Job<String>]>, comms: &SMem<i64>) -> Result<(), String> {
 	use std::process::Command;
 	use std::process::Stdio;
 
 	for job in &mut **jobs {
 		let mut process = Command::new("taskset");
-		process.arg(USERVICE_MASK).arg(&job.uservice_name).arg(format!("{}", comms.id()));
+		process.arg(USERVICE_MASK).arg(&job.uservice_path).arg(format!("{}", comms.id()));
 		if cfg!(debug_assertions) {
 			process.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
 		} else {
@@ -55,8 +55,8 @@ fn invoke(jobs: &mut Box<[Job]>, comms: &SMem<i64>) -> Result<(), String> {
 		};
 
 		let ts = nsnow().unwrap();
-		let code = process.status().map_err(|msg| format!("{}: {}", job.uservice_name, msg))?;
-		job.invocation_latency = **comms - ts;
+		let code = process.status().map_err(|msg| format!("{}: {}", job.uservice_path, msg))?;
+		job.invocation_latency = nsnow().unwrap() - ts;
 
 		if ! code.success() {
 			Err(if cfg!(debug_assertions) {
@@ -65,9 +65,9 @@ fn invoke(jobs: &mut Box<[Job]>, comms: &SMem<i64>) -> Result<(), String> {
 					String::from_utf8_lossy(&both.stderr).into_owned(),
 				)).unwrap_or((String::new(), String::new()));
 
-				format!("child '{}' died with {}\nChild's standard output:\nvvvvvvvvvvvvvvvvvvvvvvvv\n{}\n^^^^^^^^^^^^^^^^^^^^^^^^\nChild's standard error:\nvvvvvvvvvvvvvvvvvvvvvvv\n{}\n^^^^^^^^^^^^^^^^^^^^^^^", job.uservice_name, code, stdout, stderr)
+				format!("child '{}' died with {}\nChild's standard output:\nvvvvvvvvvvvvvvvvvvvvvvvv\n{}\n^^^^^^^^^^^^^^^^^^^^^^^^\nChild's standard error:\nvvvvvvvvvvvvvvvvvvvvvvv\n{}\n^^^^^^^^^^^^^^^^^^^^^^^", job.uservice_path, code, stdout, stderr)
 			} else {
-				format!("child '{}' died with {} [snip]", job.uservice_name, code)
+				format!("child '{}' died with {} [snip]", job.uservice_path, code)
 			})?;
 		}
 	}
