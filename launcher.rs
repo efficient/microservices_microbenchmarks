@@ -5,6 +5,7 @@ mod time;
 
 use job::args;
 use job::joblist;
+use job::printstats;
 use runtime::LibFun;
 use std::ffi::CString;
 use std::process::exit;
@@ -33,7 +34,5 @@ fn main() {
 		}
 	}
 
-	for job in &*jobs {
-		println!("{}", job.invocation_latency as f64 / 1_000.0);
-	}
+	printstats(&jobs);
 }

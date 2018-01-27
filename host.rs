@@ -7,6 +7,7 @@ use ipc::SMem;
 use job::Job;
 use job::args;
 use job::joblist;
+use job::printstats;
 use std::process::exit;
 use time::nsnow;
 
@@ -33,9 +34,7 @@ fn main() {
 		exit(4);
 	}
 
-	for job in &*jobs {
-		println!("{}", job.invocation_latency as f64 / 1_000.0);
-	}
+	printstats(&jobs);
 }
 
 #[cfg(not(feature = "invoke_forkexec"))]

@@ -1,4 +1,5 @@
-const NUM_USERVICES: usize = 10000;
+const NUM_USERVICES: usize = 11_000;
+const WARMUP_TRIALS: usize =  1_000;
 
 pub struct Job<T> {
 	pub uservice_path: T,
@@ -12,13 +13,19 @@ pub fn joblist<T, F: FnMut(&str) -> T>(svcnames: &mut F, numjobs: usize) -> Box<
 			invocation_latency: 0,
 		}]),
 		_ => {
-			let list: Vec<_> = (0..numjobs).map(|index| Job {
+			let list: Vec<_> = (0..numjobs + WARMUP_TRIALS).map(|index| Job {
 				uservice_path: svcnames(&format!("{}", index % NUM_USERVICES)),
 				invocation_latency: 0,
 			}).collect();
 
 			list.into_boxed_slice()
 		},
+	}
+}
+
+pub fn printstats<T>(jobs: &Box<[Job<T>]>) {
+	for job in jobs.iter().skip(WARMUP_TRIALS) {
+		println!("{}", job.invocation_latency as f64 / 1_000.0);
 	}
 }
 
