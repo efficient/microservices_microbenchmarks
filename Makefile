@@ -15,6 +15,7 @@ endif
 .PHONY: all
 all: kill_tput minimal preempt rust_test sigalrm_tput
 
+host: private LDLIBS += -lstatic=ipc
 host: private RUSTFLAGS += -L. --cfg 'feature="invoke_$(INVOCATION)"'
 host: ipc.rs libipc.a job.rs
 
@@ -33,8 +34,12 @@ preempt: time_utils.h
 sigalrm_tput: private CPPFLAGS += -D_POSIX_C_SOURCE=199309L
 sigalrm_tput: time_utils.h
 
-test: private RUSTFLAGS += -L.
-test: ipc.rs libipc.a time.rs
+test: private RUSTFLAGS += -L. -Crpath -Funsafe-code
+test: libipc.so time.rs
+
+libipc.so: private LDLIBS += -lstatic=ipc
+libipc.so: private RUSTFLAGS += -L. --crate-type dylib -Cprefer-dynamic
+libipc.so: libipc.a
 
 .PHONY: clean
 clean:

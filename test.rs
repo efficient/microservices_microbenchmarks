@@ -1,5 +1,5 @@
-#[allow(dead_code)]
-mod ipc;
+extern crate ipc;
+
 mod time;
 
 use ipc::SMem;
