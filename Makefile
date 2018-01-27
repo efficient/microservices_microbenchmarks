@@ -17,7 +17,7 @@ all: kill_tput minimal preempt rust_test sigalrm_tput
 
 host: private LDLIBS += -lstatic=ipc
 host: private RUSTFLAGS += -L. --cfg 'feature="invoke_$(INVOCATION)"'
-host: ipc.rs libipc.a job.rs
+host: bytes.rs ipc.rs libipc.a job.rs
 
 kill_tput: private CPPFLAGS += -D_POSIX_C_SOURCE=199309L
 kill_tput: time_utils.h
@@ -38,6 +38,8 @@ test: private RUSTFLAGS += -L. -Crpath -Funsafe-code
 test: libipc.so time.rs
 
 ipc.o: private CPPFLAGS += -D_XOPEN_SOURCE
+
+libbytes.so: private RUSTFLAGS += --crate-type dylib -Cprefer-dynamic
 
 libipc.rlib: libipc.a
 
