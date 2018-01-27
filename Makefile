@@ -37,6 +37,8 @@ sigalrm_tput: time_utils.h
 test: private RUSTFLAGS += -L. -Crpath -Funsafe-code
 test: libipc.so time.rs
 
+ipc.o: private CPPFLAGS += -D_XOPEN_SOURCE
+
 libipc.rlib: libipc.a
 
 libipc.so: private LDLIBS += -lstatic=ipc
