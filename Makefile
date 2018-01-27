@@ -44,7 +44,7 @@ libipc.so: private RUSTFLAGS += -L. --crate-type dylib -Cprefer-dynamic
 libipc.so: libipc.a
 
 libtest.so: private RUSTFLAGS += -L. -Funsafe-code
-libtest.so: libipc.rlib time.rs
+libtest.so: libspc.rlib time.rs
 
 .PHONY: clean
 clean:
