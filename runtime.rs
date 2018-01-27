@@ -3,13 +3,15 @@ use std::ffi::CString;
 use std::mem::transmute;
 use std::ops::Deref;
 use std::os::raw::c_char;
+use std::os::raw::c_long;
 use std::os::raw::c_void;
 use std::ptr::null;
+use std::ptr::null_mut;
 use std::panic::catch_unwind;
 
 pub struct LibFun {
 	lib: *const c_void,
-	fun: Box<Fn() -> bool>,
+	fun: Box<Fn() -> Option<i64>>,
 }
 
 impl LibFun {
@@ -17,6 +19,7 @@ impl LibFun {
 		let mut exec = LibFunny {
 			lib: null(),
 			fun: null(),
+			sbox: null_mut(),
 		};
 
 		let errmsg = unsafe {
@@ -30,10 +33,17 @@ impl LibFun {
 			let fun: fn() = unsafe {
 				transmute(exec.fun)
 			};
+			let sbox = unsafe {
+				exec.sbox.as_mut()
+			}.expect("Library has no static storage space!");
 
 			Ok(LibFun {
 				lib: exec.lib,
-				fun: Box::new(move || catch_unwind(fun).is_ok()),
+				fun: Box::new(move || {
+					catch_unwind(fun).ok()?;
+
+					Some(*sbox)
+				}),
 			})
 		} else {
 			let msg = unsafe {
@@ -59,13 +69,14 @@ impl Drop for LibFun {
 			dl_unload(LibFunny {
 				lib: self.lib,
 				fun: null(),
+				sbox: null_mut(),
 			});
 		}
 	}
 }
 
 impl Deref for LibFun {
-	type Target = Fn() -> bool;
+	type Target = Fn() -> Option<i64>;
 
 	fn deref(&self) -> &Self::Target {
 		&*self.fun
@@ -76,6 +87,7 @@ impl Deref for LibFun {
 struct LibFunny {
 	lib: *const c_void,
 	fun: *const c_void,
+	sbox: *mut c_long,
 }
 
 #[link(name = "runtime")]

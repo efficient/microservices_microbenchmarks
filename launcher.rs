@@ -24,10 +24,9 @@ fn main() {
 		});
 
 		let ts = nsnow().unwrap();
-		let finished = fun();
-		job.invocation_latency = nsnow().unwrap() - ts;
-
-		if ! finished {
+		if let Some(fin) = fun() {
+			job.invocation_latency = fin - ts;
+		} else {
 			let path = job.uservice_path.to_str().unwrap_or("");
 
 			eprintln!("While invoking microservice: child '{}' died or was killed", path);
