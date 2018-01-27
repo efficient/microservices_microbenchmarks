@@ -37,9 +37,14 @@ sigalrm_tput: time_utils.h
 test: private RUSTFLAGS += -L. -Crpath -Funsafe-code
 test: libipc.so time.rs
 
+libipc.rlib: libipc.a
+
 libipc.so: private LDLIBS += -lstatic=ipc
 libipc.so: private RUSTFLAGS += -L. --crate-type dylib -Cprefer-dynamic
 libipc.so: libipc.a
+
+libtest.so: private RUSTFLAGS += -L. -Funsafe-code
+libtest.so: libipc.rlib time.rs
 
 .PHONY: clean
 clean:
@@ -54,6 +59,9 @@ distclean:
 
 lib%.a: %.o
 	$(AR) rs $@ $^
+
+lib%.rlib: %.rs
+	$(RUSTC) --crate-type rlib --cfg 'feature="no_mangle_main"' $(RUSTFLAGS) -Clink-args="$(LDFLAGS)" $< $(LDLIBS)
 
 lib%.so: %.rs
 	$(RUSTC) --crate-type cdylib --cfg 'feature="no_mangle_main"' $(RUSTFLAGS) -Clink-args="$(LDFLAGS)" $< $(LDLIBS)
