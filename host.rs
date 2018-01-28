@@ -19,6 +19,8 @@ use job::printstats;
 use pgroup::exit;
 #[cfg(feature = "invoke_sendmsg")]
 use pgroup::kill_at_exit;
+#[cfg(feature = "invoke_sendmsg")]
+use pgroup::setpgid;
 use std::fmt::Display;
 #[cfg(feature = "invoke_sendmsg")]
 use std::os::unix::process::CommandExt;
@@ -76,7 +78,7 @@ fn handshake(jobs: &Box<[Job<String>]>) -> Result<Comms, String> {
 	let handles: Vec<_> = (0..jobs.len() / BATCH_SIZE + 1).flat_map(|group| {
 		let procs: Vec<_> = (group * BATCH_SIZE..jobs.len().min((group + 1) * BATCH_SIZE)).map(|job| {
 			let mut handle = process(&jobs[job].uservice_path, &format!("{} 127.0.0.{}:0 {}", addr, group + 2, job));
-			handle.gid(pgroup);
+			handle.before_exec(move || setpgid(pgroup).map(|_| ()));
 
 			let handle = handle.spawn().unwrap_or_else(|msg| {
 				eprintln!("Spawning child process '{}': {}", jobs[job].uservice_path, msg);

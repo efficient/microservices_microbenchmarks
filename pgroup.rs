@@ -39,3 +39,19 @@ pub fn kill_at_exit(id: i32) {
 
 	set_hook(Box::new(|_| HOOK.with(|hook| hook.borrow_mut()())));
 }
+
+pub fn setpgid(gid: u32) -> Result<u32> {
+	extern "C" {
+		fn setpgid(pid: c_int, gid: c_int) -> c_int;
+	}
+
+	let id = unsafe {
+		setpgid(0, gid as c_int)
+	};
+
+	if id != 0 {
+		Err(Error::last_os_error())?
+	}
+
+	Ok(id as u32)
+}
