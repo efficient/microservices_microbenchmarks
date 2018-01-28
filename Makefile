@@ -35,7 +35,7 @@ sigalrm_tput: private CPPFLAGS += -D_POSIX_C_SOURCE=199309L
 sigalrm_tput: time_utils.h
 
 test: private RUSTFLAGS += -L. -Crpath -Funsafe-code
-test: libipc.so time.rs
+test: libbytes.so libipc.so time.rs
 
 ipc.o: private CPPFLAGS += -D_XOPEN_SOURCE
 
@@ -48,7 +48,7 @@ libipc.so: private RUSTFLAGS += -L. --crate-type dylib -Cprefer-dynamic
 libipc.so: libipc.a
 
 libtest.so: private RUSTFLAGS += -L. -Funsafe-code
-libtest.so: libspc.rlib time.rs
+libtest.so: libbytes.rlib libspc.rlib time.rs
 
 .PHONY: clean
 clean:

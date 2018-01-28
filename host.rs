@@ -8,8 +8,6 @@ mod time;
 
 #[cfg(feature = "invoke_sendmsg")]
 use bytes::Bytes;
-#[cfg(feature = "invoke_sendmsg")]
-use bytes::DefaultBytes;
 #[cfg(feature = "invoke_forkexec")]
 use ipc::SMem;
 use job::Job;
@@ -156,8 +154,3 @@ fn process<T: Display>(path: &str, arg: T) -> Command {
 
 	process
 }
-
-#[cfg(feature = "invoke_sendmsg")]
-impl DefaultBytes for i64 {}
-#[cfg(feature = "invoke_sendmsg")]
-impl DefaultBytes for usize {}

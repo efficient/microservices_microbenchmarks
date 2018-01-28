@@ -19,6 +19,9 @@ impl<T: DefaultBytes> Bytes for T {
 
 impl DefaultBytes for () {}
 
+impl DefaultBytes for i64 {}
+impl DefaultBytes for usize {}
+
 #[test]
 fn unit() {
 	assert_eq!(0, ().bytes().len());
