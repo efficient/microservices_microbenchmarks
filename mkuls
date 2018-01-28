@@ -1,0 +1,29 @@
+#!/bin/sh
+
+readonly DIR="uls"
+readonly TARGET="ulservice"
+
+if [ $# -ne 1 ]
+then
+	echo "USAGE: $0 <numcopies>"
+	exit 1
+elif [ -e "$DIR" ]
+then
+	echo "OOPS: Directory '$DIR' already exists!" >&2
+	exit 2
+elif ! make "$TARGET"
+then
+	echo "OOPS: Failed to build recipe '$TARGET'!" >&2
+	exit 3
+fi
+numcopies="$1"
+
+mkdir "$DIR"
+for dir in `seq 0 $((numcopies / 10000))`
+do
+	mkdir "$DIR/$dir"
+	for nondir in `seq 0 9999`
+	do
+		cp "$TARGET" "$DIR/$dir/$nondir"
+	done
+done
