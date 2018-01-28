@@ -12,11 +12,11 @@ use std::process::exit;
 use time::nsnow;
 
 fn main() {
-	let (svcname, numjobs) = args().unwrap_or_else(|(retcode, errmsg)| {
+	let (svcname, numobjs, numjobs) = args().unwrap_or_else(|(retcode, errmsg)| {
 		eprintln!("{}", errmsg);
 		exit(retcode);
 	});
-	let mut jobs = joblist(&mut |index| CString::new(format!("{}{}.so", svcname, index)).unwrap(), numjobs);
+	let mut jobs = joblist(&mut |index| CString::new(format!("{}{}.so", svcname, index)).unwrap(), numobjs, numjobs);
 
 	for job in &mut *jobs {
 		let fun = LibFun::new(&job.uservice_path).unwrap_or_else(|or| {

@@ -1,43 +1,52 @@
-const NUM_USERVICES: usize = 11_000;
 const WARMUP_TRIALS: usize =  3_000;
 
+#[derive(Clone)]
 pub struct Job<T> {
 	pub uservice_path: T,
 	pub invocation_latency: i64,
 }
 
-pub fn joblist<T, F: FnMut(&str) -> T>(svcnames: &mut F, numjobs: usize) -> Box<[Job<T>]> {
-	match numjobs {
-		1 => Box::new([Job {
-			uservice_path: svcnames(""),
-			invocation_latency: 0,
-		}]),
-		_ => {
-			let list: Vec<_> = (0..numjobs + WARMUP_TRIALS).map(|index| Job {
-				uservice_path: svcnames(&format!("{}", index % NUM_USERVICES)),
-				invocation_latency: 0,
-			}).collect();
+pub fn joblist<T: Clone, F: Fn(&str) -> T>(svcnames: &mut F, numobjs: usize, numjobs: usize) -> Box<[Job<T>]> {
+	let oneshot = |_| Job {
+		uservice_path: svcnames(""),
+		invocation_latency: 0,
+	};
+	let multishot = |index| Job {
+		uservice_path: svcnames(&format!("{}", index)),
+		invocation_latency: 0,
+	};
+	let fun: &Fn(_) -> Job<T> = match numobjs {
+		1 => &oneshot,
+		_ => &multishot,
+	};
 
-			list.into_boxed_slice()
-		},
-	}
+	let jobs: Vec<_> = (0..numobjs).map(fun).cycle().take(numjobs + WARMUP_TRIALS).collect();
+
+	jobs.into_boxed_slice()
 }
 
-pub fn printstats<T>(jobs: &Box<[Job<T>]>) {
+pub fn printstats<T: Clone>(jobs: &Box<[Job<T>]>) {
 	for job in jobs.iter().skip(WARMUP_TRIALS) {
 		println!("{}", job.invocation_latency as f64 / 1_000.0);
 	}
 }
 
-pub fn args() -> Result<(String, usize), (i32, String)> {
+pub fn args() -> Result<(String, usize, usize), (i32, String)> {
 	use std::env::args;
 
 	let mut args = args();
 	let prog = args.next().unwrap_or(String::from("<program>"));
-	let usage = format!("USAGE: {} <svcname> [numjobs]", prog);
+	let usage = format!("USAGE: {} <svcname> [<numfuns> <numtrials>]", prog);
 
-	Ok((
-		args.next().ok_or((1, usage))?,
-		args.next().unwrap_or(String::from("1")).parse().or(Err((2, String::from("[numjobs], if provided, must be a nonnegative integer"))))?,
-	))
+	let svcname = args.next().ok_or((1, usage.clone()))?;
+
+	Ok(if let Some(numobjs) = args.next() {
+		(
+			svcname,
+			numobjs.parse().or((Err((2, String::from("<numfuns>, if provided, must be a nonnegative integer")))))?,
+			args.next().unwrap_or(usage.clone()).parse().or(Err((2, String::from("<numtrials>, if provided, must be a nonnegative integer"))))?,
+		)
+	} else {
+		(svcname, 1, 1)
+	})
 }

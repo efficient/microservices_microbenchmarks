@@ -6,6 +6,8 @@ mod ipc;
 mod job;
 #[cfg_attr(not(feature = "invoke_sendmsg"), allow(dead_code))]
 mod pgroup;
+#[cfg(feature = "invoke_sendmsg")]
+mod ringbuf;
 mod time;
 
 #[cfg(feature = "invoke_sendmsg")]
@@ -21,6 +23,8 @@ use pgroup::exit;
 use pgroup::kill_at_exit;
 #[cfg(feature = "invoke_sendmsg")]
 use pgroup::setpgid;
+#[cfg(feature = "invoke_sendmsg")]
+use ringbuf::RingBuffer;
 use std::fmt::Display;
 #[cfg(feature = "invoke_sendmsg")]
 use std::os::unix::process::CommandExt;
@@ -37,13 +41,13 @@ use time::nsnow;
 const USERVICE_MASK: &str = "0x4";
 
 fn main() {
-	let (svcname, numjobs) = args().unwrap_or_else(|(retcode, errmsg)| {
+	let (svcname, numobjs, numjobs) = args().unwrap_or_else(|(retcode, errmsg)| {
 		eprintln!("{}", errmsg);
 		exit(retcode);
 	});
 
-	let mut jobs = joblist(&mut |index| format!("{}{}", svcname, index), numjobs);
-	let mut comm_handles = handshake(&jobs).unwrap_or_else(|msg| {
+	let mut jobs = joblist(&mut |index| format!("{}{}", svcname, index), numobjs, numjobs);
+	let mut comm_handles = handshake(&jobs, numobjs).unwrap_or_else(|msg| {
 		eprintln!("During initialization: {}", msg);
 		exit(3);
 	});
@@ -60,23 +64,23 @@ fn main() {
 compile_error!("Must select an invoke_* personality via '--feature' or '--cfg feature='!");
 
 #[cfg(feature = "invoke_sendmsg")]
-type Comms = (UdpSocket, Box<[(Child, SocketAddr)]>);
+type Comms = (UdpSocket, RingBuffer<(Child, SocketAddr)>);
 
 #[cfg(feature = "invoke_forkexec")]
-fn handshake<'a>(_: &Box<[Job<String>]>) -> Result<SMem<'a, i64>, String> {
+fn handshake<'a>(_: &Box<[Job<String>]>, _: usize) -> Result<SMem<'a, i64>, String> {
 	SMem::new(0).map_err(|or| format!("Initializing shared memory: {}", or))
 }
 
 #[cfg(feature = "invoke_sendmsg")]
-fn handshake(jobs: &Box<[Job<String>]>) -> Result<Comms, String> {
+fn handshake(jobs: &Box<[Job<String>]>, nprocs: usize) -> Result<Comms, String> {
 	const BATCH_SIZE: usize = 100;
 
 	let socket = UdpSocket::bind("127.0.0.1:0").map_err(|or| format!("Initializing UDP socket: {}", or))?;
 	let addr = socket.local_addr().map_err(|or| format!("Determining socket address: {}", or))?;
 
 	let mut pgroup = 0;
-	let handles: Vec<_> = (0..jobs.len() / BATCH_SIZE + 1).flat_map(|group| {
-		let procs: Vec<_> = (group * BATCH_SIZE..jobs.len().min((group + 1) * BATCH_SIZE)).map(|job| {
+	let handles: Vec<_> = (0..nprocs / BATCH_SIZE + 1).flat_map(|group| {
+		let procs: Vec<_> = (group * BATCH_SIZE..nprocs.min((group + 1) * BATCH_SIZE)).map(|job| {
 			let mut handle = process(&jobs[job].uservice_path, &format!("{} 127.0.0.{}:0 {}", addr, group + 2, job));
 			handle.before_exec(move || setpgid(pgroup).map(|_| ()));
 
@@ -106,7 +110,7 @@ fn handshake(jobs: &Box<[Job<String>]>) -> Result<Comms, String> {
 		procs.into_iter().zip(ports.into_iter().map(|(_, addr)| addr))
 	}).collect();
 
-	Ok((socket, handles.into_boxed_slice()))
+	Ok((socket, RingBuffer::new(handles.into_boxed_slice())))
 }
 
 #[cfg(feature = "invoke_forkexec")]
