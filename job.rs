@@ -1,3 +1,5 @@
+use std::env::Args;
+
 const WARMUP_TRIALS: usize =  3_000;
 
 #[derive(Clone)]
@@ -31,12 +33,12 @@ pub fn printstats<T: Clone>(jobs: &Box<[Job<T>]>) {
 	}
 }
 
-pub fn args() -> Result<(String, usize, usize), (i32, String)> {
+pub fn args(extra_usage: &str) -> Result<(String, usize, usize, Args), (i32, String)> {
 	use std::env::args;
 
 	let mut args = args();
 	let prog = args.next().unwrap_or(String::from("<program>"));
-	let usage = format!("USAGE: {} <svcname> [<numfuns> <numtrials>]", prog);
+	let usage = format!("USAGE: {} <svcname> [<numfuns> <numtrials>{}{}]", prog, if extra_usage.is_empty() { "" } else { " " }, extra_usage);
 
 	let svcname = args.next().ok_or((1, usage.clone()))?;
 
@@ -45,8 +47,9 @@ pub fn args() -> Result<(String, usize, usize), (i32, String)> {
 			svcname,
 			numobjs.parse().or((Err((2, String::from("<numfuns>, if provided, must be a nonnegative integer")))))?,
 			args.next().unwrap_or(usage.clone()).parse().or(Err((2, String::from("<numtrials>, if provided, must be a nonnegative integer"))))?,
+			args,
 		)
 	} else {
-		(svcname, 1, 1)
+		(svcname, 1, 1, args)
 	})
 }

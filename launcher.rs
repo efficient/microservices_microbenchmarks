@@ -12,7 +12,7 @@ use std::process::exit;
 use time::nsnow;
 
 fn main() {
-	let (svcname, numobjs, numjobs) = args().unwrap_or_else(|(retcode, errmsg)| {
+	let (svcname, numobjs, numjobs, _) = args("").unwrap_or_else(|(retcode, errmsg)| {
 		eprintln!("{}", errmsg);
 		exit(retcode);
 	});

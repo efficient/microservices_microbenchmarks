@@ -25,26 +25,40 @@ use pgroup::kill_at_exit;
 use pgroup::setpgid;
 #[cfg(feature = "invoke_sendmsg")]
 use ringbuf::RingBuffer;
+use std::cell::RefCell;
 use std::fmt::Display;
-#[cfg(feature = "invoke_sendmsg")]
-use std::os::unix::process::CommandExt;
+use std::mem::replace;
 #[cfg(feature = "invoke_sendmsg")]
 use std::net::SocketAddr;
 #[cfg(feature = "invoke_sendmsg")]
 use std::net::UdpSocket;
+#[cfg(feature = "invoke_sendmsg")]
+use std::os::unix::process::CommandExt;
 #[cfg(feature = "invoke_sendmsg")]
 use std::process::Child;
 use std::process::Command;
 use std::process::Stdio;
 use time::nsnow;
 
-const USERVICE_MASK: &str = "0x4";
+const DEFAULT_USERVICE_MASK: &str = "0x4";
+
+thread_local! {
+	static USERVICE_MASK: RefCell<String> = RefCell::new(String::from(DEFAULT_USERVICE_MASK));
+}
 
 fn main() {
-	let (svcname, numobjs, numjobs) = args().unwrap_or_else(|(retcode, errmsg)| {
+	let (svcname, numobjs, numjobs, mut args) = args("[cpumask]").unwrap_or_else(|(retcode, errmsg)| {
 		eprintln!("{}", errmsg);
 		exit(retcode);
 	});
+	if let Some(mask) = args.next() {
+		if &mask[0..2] != "0x" {
+			eprintln!("[cpumask], if provided, must be a hex mask starting with '0x'");
+			exit(2);
+		}
+
+		USERVICE_MASK.with(|uservice_mask| replace(&mut *uservice_mask.borrow_mut(), mask));
+	}
 
 	let mut jobs = joblist(&mut |index| format!("{}{}", svcname, index), numobjs, numjobs);
 	let mut comm_handles = handshake(&jobs, numobjs).unwrap_or_else(|msg| {
@@ -167,7 +181,9 @@ fn invoke(jobs: &mut Box<[Job<String>]>, comms: &mut Comms) -> Result<(), String
 fn process<T: Display>(path: &str, arg: T) -> Command {
 	let mut process = Command::new("taskset");
 
-	process.arg(USERVICE_MASK).arg(path).arg(format!("{}", arg));
+	USERVICE_MASK.with(|uservice_mask| process.arg(&*uservice_mask.borrow()));
+	process.arg(path).arg(format!("{}", arg));
+
 	if cfg!(debug_assertions) {
 		process.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
 	} else {
