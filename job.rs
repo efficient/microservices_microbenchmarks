@@ -1,5 +1,5 @@
 const NUM_USERVICES: usize = 11_000;
-const WARMUP_TRIALS: usize =  1_000;
+const WARMUP_TRIALS: usize =  3_000;
 
 pub struct Job<T> {
 	pub uservice_path: T,
