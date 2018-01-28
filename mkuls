@@ -1,29 +1,42 @@
 #!/bin/sh
 
 readonly DIR="uls"
-readonly TARGET="ulservice"
 
-if [ $# -ne 1 ]
+if [ $# -lt 2 -o $# -gt 3 ]
 then
-	echo "USAGE: $0 <numcopies>"
+	echo "USAGE: $0 <file> <numcopies> [subdir]"
 	exit 1
-elif [ -e "$DIR" ]
+fi
+file="$1"
+numcopies="$2"
+shift 2
+dir="$DIR"
+if [ $# -ne 0 ]
 then
-	echo "OOPS: Directory '$DIR' already exists!" >&2
+	dir="$1"
+	shift
+fi
+
+if [ -e "$dir" ]
+then
+	echo "OOPS: Directory '$dir' already exists!" >&2
 	exit 2
-elif ! make "$TARGET"
+elif ! make "$file"
 then
-	echo "OOPS: Failed to build recipe '$TARGET'!" >&2
+	echo "OOPS: Failed to build recipe '$file'!" >&2
 	exit 3
 fi
-numcopies="$1"
 
-mkdir "$DIR"
-for dir in `seq 0 $((numcopies / 10000))`
+suffix="`printf %s "$file" | sed -n 's/.*\(\..\+\)/\1/p'`"
+libs="`ldd "$file" | sed -n "s:.*$PWD/./\([^ ]\+\).*:../../\1:p"`"
+
+mkdir "$dir"
+for subdir in `seq 0 $((numcopies / 10000))`
 do
-	mkdir "$DIR/$dir"
+	mkdir "$dir/$subdir"
 	for nondir in `seq 0 9999`
 	do
-		cp "$TARGET" "$DIR/$dir/$nondir"
+		cp "$file" "$dir/$subdir/$nondir$suffix"
 	done
+	[ -n "$libs" ] && ln -s $libs "$dir/$subdir"
 done
