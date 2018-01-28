@@ -4,6 +4,8 @@ mod bytes;
 #[cfg(feature = "invoke_forkexec")]
 mod ipc;
 mod job;
+#[cfg_attr(not(feature = "invoke_sendmsg"), allow(dead_code))]
+mod pgroup;
 mod time;
 
 #[cfg(feature = "invoke_sendmsg")]
@@ -14,7 +16,12 @@ use job::Job;
 use job::args;
 use job::joblist;
 use job::printstats;
+use pgroup::exit;
+#[cfg(feature = "invoke_sendmsg")]
+use pgroup::kill_at_exit;
 use std::fmt::Display;
+#[cfg(feature = "invoke_sendmsg")]
+use std::os::unix::process::CommandExt;
 #[cfg(feature = "invoke_sendmsg")]
 use std::net::SocketAddr;
 #[cfg(feature = "invoke_sendmsg")]
@@ -23,7 +30,6 @@ use std::net::UdpSocket;
 use std::process::Child;
 use std::process::Command;
 use std::process::Stdio;
-use std::process::exit;
 use time::nsnow;
 
 const USERVICE_MASK: &str = "0x4";
@@ -66,13 +72,23 @@ fn handshake(jobs: &Box<[Job<String>]>) -> Result<Comms, String> {
 	let socket = UdpSocket::bind("127.0.0.1:0").map_err(|or| format!("Initializing UDP socket: {}", or))?;
 	let addr = socket.local_addr().map_err(|or| format!("Determining socket address: {}", or))?;
 
+	let mut pgroup = 0;
 	let handles: Vec<_> = (0..jobs.len() / BATCH_SIZE + 1).flat_map(|group| {
-		let procs: Vec<_> = (group * BATCH_SIZE..jobs.len().min((group + 1) * BATCH_SIZE)).map(|job|
-			process(&jobs[job].uservice_path, &format!("{} 127.0.0.{}:0 {}", addr, group + 2, job)).spawn().unwrap_or_else(|msg| {
+		let procs: Vec<_> = (group * BATCH_SIZE..jobs.len().min((group + 1) * BATCH_SIZE)).map(|job| {
+			let mut handle = process(&jobs[job].uservice_path, &format!("{} 127.0.0.{}:0 {}", addr, group + 2, job));
+			handle.gid(pgroup);
+
+			let handle = handle.spawn().unwrap_or_else(|msg| {
 				eprintln!("Spawning child process '{}': {}", jobs[job].uservice_path, msg);
 				exit(5);
-			})
-		).collect();
+			});
+			if job == 0 {
+				pgroup = handle.id();
+				kill_at_exit(-(pgroup as i32));
+			}
+
+			handle
+		}).collect();
 
 		let mut ports: Vec<_> = (0..procs.len()).map(|_| {
 			let mut process = 0usize;
