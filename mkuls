@@ -1,6 +1,7 @@
 #!/bin/sh
 
 readonly DIR="uls"
+readonly GROUPING="10000"
 
 if [ $# -lt 2 -o $# -gt 3 ]
 then
@@ -31,10 +32,17 @@ suffix="`printf %s "$file" | sed -n 's/.*\(\..\+\)/\1/p'`"
 libs="`ldd "$file" | sed -n "s:.*$PWD/./\([^ ]\+\).*:../../\1:p"`"
 
 mkdir "$dir"
-for subdir in `seq 0 $((numcopies / 10000))`
+last="$((GROUPING - 1))"
+for subdir in `seq 0 $((numcopies / GROUPING)) | sed '$i\last'`
 do
+	if [ "$subdir" = "last" ]
+	then
+		last="$((numcopies % GROUPING - 1))"
+		continue
+	fi
+
 	mkdir "$dir/$subdir"
-	for nondir in `seq 0 9999`
+	for nondir in `seq 0 "$last"`
 	do
 		cp "$file" "$dir/$subdir/$nondir$suffix"
 	done
