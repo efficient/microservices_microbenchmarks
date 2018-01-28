@@ -1,5 +1,6 @@
 use std::env::Args;
 
+const OBJS_PER_DIR: usize  = 10_000;
 const WARMUP_TRIALS: usize =  3_000;
 
 #[derive(Clone)]
@@ -14,7 +15,7 @@ pub fn joblist<T: Clone, F: Fn(&str) -> T>(svcnames: &mut F, numobjs: usize, num
 		invocation_latency: 0,
 	};
 	let multishot = |index| Job {
-		uservice_path: svcnames(&format!("{}", index)),
+		uservice_path: svcnames(&format!("{}/{}", index / OBJS_PER_DIR, index % OBJS_PER_DIR)),
 		invocation_latency: 0,
 	};
 	let fun: &Fn(_) -> Job<T> = match numobjs {
