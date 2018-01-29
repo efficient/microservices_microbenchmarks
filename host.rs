@@ -1,7 +1,7 @@
 #[cfg(feature = "invoke_sendmsg")]
 mod bytes;
 #[allow(dead_code)]
-#[cfg(feature = "invoke_forkexec")]
+#[cfg(any(feature = "invoke_forkexec", feature = "invoke_launcher"))]
 mod ipc;
 mod job;
 #[cfg_attr(not(feature = "invoke_sendmsg"), allow(dead_code))]
@@ -12,16 +12,21 @@ mod time;
 
 #[cfg(feature = "invoke_sendmsg")]
 use bytes::Bytes;
-#[cfg(feature = "invoke_forkexec")]
+#[cfg(any(feature = "invoke_forkexec", feature = "invoke_launcher"))]
 use ipc::SMem;
+#[cfg(feature = "invoke_launcher")]
+use job::FixedCString;
 use job::Job;
 use job::args;
-use job::joblist;
+#[cfg(feature = "invoke_launcher")]
+use job::as_fixed_c_string;
+#[cfg(feature = "invoke_launcher")]
+use job::fixed_c_string;
 use job::printstats;
 use pgroup::exit;
-#[cfg(feature = "invoke_sendmsg")]
+#[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
 use pgroup::kill_at_exit;
-#[cfg(feature = "invoke_sendmsg")]
+#[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
 use pgroup::setpgid;
 #[cfg(feature = "invoke_sendmsg")]
 use ringbuf::RingBuffer;
@@ -32,9 +37,9 @@ use std::mem::replace;
 use std::net::SocketAddr;
 #[cfg(feature = "invoke_sendmsg")]
 use std::net::UdpSocket;
-#[cfg(feature = "invoke_sendmsg")]
+#[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
 use std::os::unix::process::CommandExt;
-#[cfg(feature = "invoke_sendmsg")]
+#[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
 use std::process::Child;
 use std::process::Command;
 use std::process::Stdio;
@@ -64,7 +69,7 @@ fn main() {
 		USERVICE_MASK.with(|uservice_mask| replace(&mut *uservice_mask.borrow_mut(), mask));
 	}
 
-	let mut jobs = joblist(&mut |index| format!("{}{}", svcname, index), numobjs, numjobs);
+	let mut jobs = joblist(&svcname, numobjs, numjobs);
 	let mut comm_handles = handshake(&jobs, numobjs).unwrap_or_else(|msg| {
 		eprintln!("During initialization: {}", msg);
 		exit(3);
@@ -78,11 +83,30 @@ fn main() {
 	printstats(&jobs);
 }
 
-#[cfg(not(any(feature = "invoke_forkexec", feature = "invoke_sendmsg")))]
+#[cfg(not(any(feature = "invoke_forkexec", feature = "invoke_sendmsg", feature = "invoke_launcher")))]
 compile_error!("Must select an invoke_* personality via '--feature' or '--cfg feature='!");
 
 #[cfg(feature = "invoke_sendmsg")]
 type Comms = (UdpSocket, RingBuffer<(Child, SocketAddr)>);
+
+#[cfg(feature = "invoke_launcher")]
+type Comms<'a> = (Child, SMem<'a, (bool, Job<FixedCString>)>);
+
+#[cfg(not(feature = "invoke_launcher"))]
+pub fn joblist(svcname: &str, numobjs: usize, numjobs: usize) -> Box<[Job<String>]> {
+	use job::joblist;
+
+	joblist(&mut |index| format!("{}{}", svcname, index), numobjs, numjobs)
+}
+
+#[cfg(feature = "invoke_launcher")]
+pub fn joblist(svcname: &str, numobjs: usize, numjobs: usize) -> Box<[Job<FixedCString>]> {
+	use job::joblist;
+
+	joblist(&mut |index| {
+		as_fixed_c_string(&format!("{}{}.so", svcname, index))
+	}, numobjs, numjobs)
+}
 
 #[cfg(feature = "invoke_forkexec")]
 fn handshake<'a>(_: &Box<[Job<String>]>, _: usize) -> Result<SMem<'a, i64>, String> {
@@ -129,6 +153,21 @@ fn handshake(jobs: &Box<[Job<String>]>, nprocs: usize) -> Result<Comms, String> 
 	}).collect();
 
 	Ok((socket, RingBuffer::new(handles.into_boxed_slice())))
+}
+
+#[cfg(feature = "invoke_launcher")]
+fn handshake<'a>(_: &Box<[Job<FixedCString>]>, _: usize) -> Result<Comms<'a>, String> {
+	let mem = SMem::new((false, Job {
+		uservice_path: fixed_c_string(),
+		invocation_latency: 0,
+	})).map_err(|msg| format!("Initializing shared memory: {}", msg))?;
+
+	let mut handle = process("./launcher", format!("{}", mem.id()));
+	handle.before_exec(|| setpgid(0).map(|_| ()));
+	let handle = handle.spawn().map_err(|msg| format!("Spawning launcher process: {}", msg))?;
+	kill_at_exit(handle.id() as i32);
+
+	Ok((handle, mem))
 }
 
 #[cfg(feature = "invoke_forkexec")]
@@ -178,6 +217,25 @@ fn invoke(jobs: &mut Box<[Job<String>]>, comms: &mut Comms) -> Result<(), String
 	for &mut (ref mut child, _) in &mut **them {
 		child.wait().map_err(|err| format!("Waiting on child: {}", err))?;
 	}
+
+	Ok(())
+}
+
+#[cfg(feature = "invoke_launcher")]
+fn invoke(jobs: &mut Box<[Job<FixedCString>]>, comms: &mut Comms) -> Result<(), String> {
+	let &mut (ref mut launcher, ref mut task) = comms;
+
+	for job in &mut **jobs {
+		task.1 = job.clone();
+
+		let ts = nsnow().unwrap();
+		task.0 = true;
+		while task.0 {}
+		job.invocation_latency = task.1.invocation_latency - ts;
+	}
+
+	launcher.kill().map_err(|err| format!("Killing child: {}", err))?;
+	launcher.wait().map_err(|err| format!("Waiting on child: {}", err))?;
 
 	Ok(())
 }

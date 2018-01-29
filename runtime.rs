@@ -20,7 +20,7 @@ pub struct LibFun {
 }
 
 impl LibFun {
-	pub fn new(sofile: &CString) -> Result<Self, String> {
+	pub fn new(sofile: &CStr) -> Result<Self, String> {
 		let mut exec = LibFunny {
 			lib: null(),
 			fun: null(),
@@ -65,6 +65,12 @@ impl LibFun {
 		let sofile = CString::new(&*sofile).map_err(|or| format!("{}", or))?;
 
 		Self::new(&sofile)
+	}
+
+	pub fn new_from_ptr(libname: *const c_char) -> Result<Self, String> {
+		Self::new(unsafe {
+			CStr::from_ptr(libname)
+		})
 	}
 }
 

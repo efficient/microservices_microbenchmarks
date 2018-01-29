@@ -3,6 +3,26 @@ use std::env::Args;
 const OBJS_PER_DIR: usize  = 10_000;
 const WARMUP_TRIALS: usize =  3_000;
 
+pub type FixedCString = [u8; 24];
+
+pub fn fixed_c_string() -> FixedCString {
+	[0; 24]
+}
+
+pub fn as_fixed_c_string(content: &str) -> FixedCString {
+	let mut container = fixed_c_string();
+
+	let content = content.as_bytes();
+	assert!(content.len() + 1 < container.len());
+
+	for index in 0..content.len() {
+		container[index] = content[index];
+	}
+	container[content.len()] = b'\0';
+
+	container
+}
+
 #[derive(Clone)]
 pub struct Job<T> {
 	pub uservice_path: T,

@@ -28,7 +28,7 @@ kill_tput: time_utils.h
 
 launcher: private LDLIBS += -ldl
 launcher: private RUSTFLAGS += -L. --cfg 'feature="$(UNLOADING)_loaded"'
-launcher: job.rs runtime.rs libruntime.a
+launcher: ipc.rs libipc.a job.rs runtime.rs libruntime.a
 
 minimal: private CPPFLAGS += -D_GNU_SOURCE
 
