@@ -14,6 +14,8 @@ use job::joblist;
 use job::printstats;
 use runtime::LibFun;
 use std::process::exit;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use time::nsnow;
 
 fn main() {
@@ -33,10 +35,10 @@ fn main() {
 		});
 
 		loop {
-			let &mut (ref mut ready, ref mut job) = &mut *job;
-			if *ready {
+			let &mut (ref mut ready, ref mut job): &mut (AtomicBool, _) = &mut *job;
+			if ready.load(Ordering::Relaxed) {
 				invoke(job, false);
-				*ready = false;
+				*ready.get_mut() = false;
 			}
 		}
 	} else {

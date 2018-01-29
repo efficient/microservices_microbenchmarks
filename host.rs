@@ -43,6 +43,10 @@ use std::os::unix::process::CommandExt;
 use std::process::Child;
 use std::process::Command;
 use std::process::Stdio;
+#[cfg(feature = "invoke_launcher")]
+use std::sync::atomic::AtomicBool;
+#[cfg(feature = "invoke_launcher")]
+use std::sync::atomic::Ordering;
 use time::nsnow;
 
 const DEFAULT_USERVICE_MASK: &str = "0x4";
@@ -90,7 +94,7 @@ compile_error!("Must select an invoke_* personality via '--feature' or '--cfg fe
 type Comms = (UdpSocket, RingBuffer<(Child, SocketAddr)>);
 
 #[cfg(feature = "invoke_launcher")]
-type Comms<'a> = (Child, SMem<'a, (bool, Job<FixedCString>)>);
+type Comms<'a> = (Child, SMem<'a, (AtomicBool, Job<FixedCString>)>);
 
 #[cfg(not(feature = "invoke_launcher"))]
 pub fn joblist(svcname: &str, numobjs: usize, numjobs: usize) -> Box<[Job<String>]> {
@@ -157,7 +161,7 @@ fn handshake(jobs: &Box<[Job<String>]>, nprocs: usize) -> Result<Comms, String> 
 
 #[cfg(feature = "invoke_launcher")]
 fn handshake<'a>(_: &Box<[Job<FixedCString>]>, _: usize) -> Result<Comms<'a>, String> {
-	let mem = SMem::new((false, Job {
+	let mem = SMem::new((AtomicBool::new(false), Job {
 		uservice_path: fixed_c_string(),
 		invocation_latency: 0,
 	})).map_err(|msg| format!("Initializing shared memory: {}", msg))?;
@@ -229,8 +233,8 @@ fn invoke(jobs: &mut Box<[Job<FixedCString>]>, comms: &mut Comms) -> Result<(), 
 		task.1 = job.clone();
 
 		let ts = nsnow().unwrap();
-		task.0 = true;
-		while task.0 {}
+		*task.0.get_mut() = true;
+		while task.0.load(Ordering::Relaxed) {}
 		job.invocation_latency = task.1.invocation_latency - ts;
 	}
 
