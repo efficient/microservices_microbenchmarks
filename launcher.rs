@@ -23,12 +23,12 @@ fn main() {
 	let mut jobs = joblist(&mut |index| CString::new(format!("{}{}.so", svcname, index)).unwrap(), numobjs, numjobs);
 
 	for job in &mut *jobs {
+		let ts = nsnow().unwrap();
 		let fun = LibFun::new(&job.uservice_path).unwrap_or_else(|or| {
 			eprintln!("{}", or);
 			exit(2);
 		});
 
-		let ts = nsnow().unwrap();
 		if let Some(fin) = fun() {
 			job.invocation_latency = fin - ts;
 		} else {
