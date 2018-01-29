@@ -7,4 +7,5 @@ then
 fi
 
 ulimit -p unlimited
+ulimit -Sn "`ulimit -Hn`"
 exec "$@"

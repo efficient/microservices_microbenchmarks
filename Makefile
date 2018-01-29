@@ -15,6 +15,10 @@ endif
 .PHONY: all
 all: kill_tput minimal preempt rust_test sigalrm_tput
 
+sh:
+	cp $(shell which $@) .
+	sudo setcap cap_sys_resource+ep $@
+
 host: private LDLIBS += -lstatic=ipc
 host: private RUSTFLAGS += -L. --cfg 'feature="invoke_$(INVOCATION)"'
 host: bytes.rs ipc.rs libipc.a job.rs pgroup.rs ringbuf.rs
