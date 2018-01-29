@@ -26,7 +26,7 @@ host: bytes.rs ipc.rs libipc.a job.rs pgroup.rs ringbuf.rs
 kill_tput: private CPPFLAGS += -D_POSIX_C_SOURCE=199309L
 kill_tput: time_utils.h
 
-launcher: private LDLIBS += -ldl
+launcher: private LDLIBS += -ldl -lstatic=ipc
 launcher: private RUSTFLAGS += -L. --cfg 'feature="$(UNLOADING)_loaded"'
 launcher: ipc.rs libipc.a job.rs runtime.rs libruntime.a
 
