@@ -9,6 +9,11 @@ use std::ptr::null;
 use std::ptr::null_mut;
 use std::panic::catch_unwind;
 
+#[cfg(feature = "preserve_loaded")]
+const PRESERVE_LOADED_LIBS: bool = true;
+#[cfg(feature = "cleanup_loaded")]
+const PRESERVE_LOADED_LIBS: bool = false;
+
 pub struct LibFun {
 	lib: *const c_void,
 	fun: Box<Fn() -> Option<i64>>,
@@ -23,7 +28,7 @@ impl LibFun {
 		};
 
 		let errmsg = unsafe {
-			dl_load(&mut exec, sofile.as_ptr())
+			dl_load(&mut exec, sofile.as_ptr(), PRESERVE_LOADED_LIBS)
 		};
 
 		if errmsg.is_null() {
@@ -92,6 +97,9 @@ struct LibFunny {
 
 #[link(name = "runtime")]
 extern "C" {
-	fn dl_load(exec: *mut LibFunny, sofile: *const c_char) -> *const c_char;
+	fn dl_load(exec: *mut LibFunny, sofile: *const c_char, preserve: bool) -> *const c_char;
 	fn dl_unload(exec: LibFunny);
 }
+
+#[cfg(not(any(feature = "preserve_loaded", feature = "cleanup_loaded")))]
+compile_error!("Must select an *_loaded personality via '--feature' or '--cfg feature='!");

@@ -3,6 +3,7 @@
 
 #include <dlfcn.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 static const char *ENTRY_POINT = "main";
 static const char *STORAGE_LOC = "SBOX";
@@ -13,8 +14,8 @@ struct libfunny {
 	int *sbox;
 };
 
-const char *dl_load(struct libfunny *exec, const char *sofile) {
-	exec->lib = dlopen(sofile, RTLD_LAZY | RTLD_LOCAL);
+const char *dl_load(struct libfunny *exec, const char *sofile, bool preserve) {
+	exec->lib = dlopen(sofile, RTLD_LAZY | RTLD_LOCAL | (-preserve & RTLD_NODELETE));
 	if(!exec->lib)
 		return dlerror();
 
