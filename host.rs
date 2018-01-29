@@ -48,12 +48,16 @@ thread_local! {
 
 fn main() {
 	let (svcname, numobjs, numjobs, mut args) = args("[cpumask]").unwrap_or_else(|(retcode, errmsg)| {
-		eprintln!("{}", errmsg);
+		println!("{}", errmsg);
 		exit(retcode);
 	});
+	if numjobs < numobjs {
+		println!("<numfuns> may not be greater than <numtrials>");
+		exit(2);
+	}
 	if let Some(mask) = args.next() {
 		if &mask[0..2] != "0x" {
-			eprintln!("[cpumask], if provided, must be a hex mask starting with '0x'");
+			println!("[cpumask], if provided, must be a hex mask starting with '0x'");
 			exit(2);
 		}
 

@@ -13,9 +13,13 @@ use time::nsnow;
 
 fn main() {
 	let (svcname, numobjs, numjobs, _) = args("").unwrap_or_else(|(retcode, errmsg)| {
-		eprintln!("{}", errmsg);
+		println!("{}", errmsg);
 		exit(retcode);
 	});
+	if numjobs < numobjs {
+		println!("<numfuns> may not be greater than <numtrials>");
+		exit(2);
+	}
 	let mut jobs = joblist(&mut |index| CString::new(format!("{}{}.so", svcname, index)).unwrap(), numobjs, numjobs);
 
 	for job in &mut *jobs {
