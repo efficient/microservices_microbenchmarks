@@ -3,9 +3,12 @@ use std::io::Error;
 use std::io::Result;
 use std::mem::replace;
 use std::os::raw::c_int;
+use std::panic::PanicInfo;
 use std::panic::set_hook;
+use std::panic::take_hook;
 
 thread_local! {
+	static DEFAULT_HOOK: RefCell<Option<Box<Fn(&PanicInfo)>>> = RefCell::new(None);
 	static HOOK: RefCell<Box<Fn()>> = RefCell::new(Box::new(|| ()));
 }
 
@@ -37,7 +40,16 @@ pub fn kill_at_exit(id: i32) {
 		replace(&mut *hook.borrow_mut(), Box::new(move || kill(id).unwrap_or_else(|err| eprintln!("Failed to kill all child processes: {}", err))));
 	});
 
-	set_hook(Box::new(|_| HOOK.with(|hook| hook.borrow_mut()())));
+	DEFAULT_HOOK.with(|default_hook| {
+		if default_hook.borrow().is_none() {
+			replace(&mut *default_hook.borrow_mut(), Some(take_hook()));
+		}
+	});
+
+	set_hook(Box::new(|crash| {
+		HOOK.with(|hook| hook.borrow_mut()());
+		DEFAULT_HOOK.with(|default_hook| default_hook.borrow().as_ref().unwrap()(crash));
+	}));
 }
 
 pub fn setpgid(gid: u32) -> Result<u32> {
