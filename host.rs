@@ -7,7 +7,7 @@ mod ipc;
 mod job;
 #[cfg_attr(not(feature = "invoke_sendmsg"), allow(dead_code))]
 mod pgroup;
-#[cfg(feature = "invoke_sendmsg")]
+#[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
 mod ringbuf;
 mod time;
 
@@ -29,7 +29,7 @@ use pgroup::exit;
 use pgroup::kill_at_exit;
 #[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
 use pgroup::setpgid;
-#[cfg(feature = "invoke_sendmsg")]
+#[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
 use ringbuf::RingBuffer;
 use std::cell::RefCell;
 use std::fmt::Display;
@@ -95,7 +95,7 @@ compile_error!("Must select an invoke_* personality via '--feature' or '--cfg fe
 type Comms = (UdpSocket, RingBuffer<(Child, SocketAddr)>);
 
 #[cfg(feature = "invoke_launcher")]
-type Comms<'a> = (Child, SMem<'a, (AtomicBool, Job<FixedCString>)>);
+type Comms<'a> = RingBuffer<(Child, SMem<'a, (AtomicBool, Job<FixedCString>)>)>;
 
 #[cfg(not(feature = "invoke_launcher"))]
 pub fn joblist(svcname: &str, numobjs: usize, numjobs: usize) -> Box<[Job<String>]> {
@@ -162,17 +162,36 @@ fn handshake(jobs: &Box<[Job<String>]>, nprocs: usize) -> Result<Comms, String> 
 
 #[cfg(feature = "invoke_launcher")]
 fn handshake<'a>(_: &Box<[Job<FixedCString>]>, _: usize) -> Result<Comms<'a>, String> {
-	let mem = SMem::new((AtomicBool::new(false), Job {
-		uservice_path: fixed_c_string(),
-		invocation_latency: 0,
-	})).map_err(|msg| format!("Initializing shared memory: {}", msg))?;
+	let mut ones = 0;
+	USERVICE_MASK.with(|uservice_mask| {
+		ones = usize::from_str_radix(&uservice_mask.borrow()[2..], 16).unwrap().count_ones()
+	});
 
-	let mut handle = process("./launcher", format!("{}", mem.id()));
-	handle.before_exec(|| setpgid(0).map(|_| ()));
-	let handle = handle.spawn().map_err(|msg| format!("Spawning launcher process: {}", msg))?;
-	kill_at_exit(handle.id() as i32);
+	let mut pgroup = 0;
+	let them: Vec<_> = (0..ones).map(|count| {
+		let mem = SMem::new((AtomicBool::new(false), Job {
+			uservice_path: fixed_c_string(),
+			invocation_latency: 0,
+		})).unwrap_or_else(|msg| {
+			eprintln!("Initializing shared memory: {}", msg);
+			exit(5);
+		});
 
-	Ok((handle, mem))
+		let mut handle = process("./launcher", format!("{}", mem.id()));
+		handle.before_exec(move || setpgid(pgroup).map(|_| ()));
+		let handle = handle.spawn().unwrap_or_else(|msg| {
+			eprintln!("Spawning launcher process: {}", msg);
+			exit(6);
+		});
+		if count == 0 {
+			pgroup = handle.id();
+			kill_at_exit(-(pgroup as i32));
+		}
+
+		(handle, mem)
+	}).collect();
+
+	Ok(RingBuffer::new(them.into_boxed_slice()))
 }
 
 #[cfg(feature = "invoke_forkexec")]
@@ -228,19 +247,23 @@ fn invoke(jobs: &mut Box<[Job<String>]>, comms: &mut Comms) -> Result<(), String
 
 #[cfg(feature = "invoke_launcher")]
 fn invoke(jobs: &mut Box<[Job<FixedCString>]>, comms: &mut Comms) -> Result<(), String> {
-	let &mut (ref mut launcher, ref mut task) = comms;
-
-	for job in &mut **jobs {
-		task.1 = job.clone();
+	for job in 0..jobs.len() {
+		let &mut (_, ref mut task) = &mut comms[job];
+		task.1 = jobs[job].clone();
 
 		let ts = nsnow().unwrap();
 		*task.0.get_mut() = true;
 		while task.0.load(Ordering::Relaxed) {}
-		job.invocation_latency = task.1.invocation_latency - ts;
+		jobs[job].invocation_latency = task.1.invocation_latency - ts;
 	}
 
-	launcher.kill().map_err(|err| format!("Killing child: {}", err))?;
-	launcher.wait().map_err(|err| format!("Waiting on child: {}", err))?;
+	for &mut (ref mut launcher, _) in &mut **comms {
+		launcher.kill().map_err(|err| format!("Killing child: {}", err))?;
+	}
+
+	for &mut (ref mut launcher, _) in &mut **comms {
+		launcher.wait().map_err(|err| format!("Waiting on child: {}", err))?;
+	}
 
 	Ok(())
 }
