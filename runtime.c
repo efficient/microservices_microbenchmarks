@@ -14,7 +14,7 @@ struct libfunny {
 };
 
 const char *dl_load(struct libfunny *exec, const char *sofile) {
-	exec->lib = dlopen(sofile, RTLD_NOW);
+	exec->lib = dlopen(sofile, RTLD_LAZY | RTLD_LOCAL);
 	if(!exec->lib)
 		return dlerror();
 
