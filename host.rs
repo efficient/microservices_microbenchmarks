@@ -201,7 +201,7 @@ fn invoke(jobs: &mut Box<[Job<String>]>, comms: &SMem<i64>) -> Result<(), String
 
 		let ts = nsnow().unwrap();
 		let code = process.status().map_err(|msg| format!("{}: {}", job.uservice_path, msg))?;
-		job.invocation_latency = nsnow().unwrap() - ts;
+		job.invocation_latency = **comms - ts;
 
 		if ! code.success() {
 			Err(if cfg!(debug_assertions) {
