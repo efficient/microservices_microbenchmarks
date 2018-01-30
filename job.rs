@@ -1,5 +1,8 @@
 use std::cell::Cell;
 use std::env::Args;
+use std::fmt::Display;
+use std::fmt::Error;
+use std::fmt::Formatter;
 
 const OBJS_PER_DIR: usize  = 10_000;
 const WARMUP_TRIALS: usize =      0; // 0 means the number of distinct object files
@@ -34,15 +37,24 @@ pub struct Job<T> {
 	pub invocation_latency: i64,
 }
 
+impl<T> Job<T> {
+	pub fn new(path: T) -> Self {
+		Job {
+			uservice_path: path,
+			invocation_latency: 0,
+		}
+	}
+}
+
+impl<T> Display for Job<T> {
+	fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+		write!(f, "{}", self.invocation_latency as f64 / 1_000.0)
+	}
+}
+
 pub fn joblist<T: Clone, F: Fn(&str) -> T>(svcnames: F, numobjs: usize, numjobs: usize) -> Box<[Job<T>]> {
-	let oneshot = |_| Job {
-		uservice_path: svcnames(""),
-		invocation_latency: 0,
-	};
-	let multishot = |index| Job {
-		uservice_path: svcnames(&format!("{}/{}", index / OBJS_PER_DIR, index % OBJS_PER_DIR)),
-		invocation_latency: 0,
-	};
+	let oneshot = |_| Job::new(svcnames(""));
+	let multishot = |index| Job::new(svcnames(&format!("{}/{}", index / OBJS_PER_DIR, index % OBJS_PER_DIR)));
 	let fun: &Fn(_) -> Job<T> = match numobjs {
 		1 => &oneshot,
 		_ => &multishot,
@@ -69,7 +81,7 @@ pub fn printstats<T: Clone>(jobs: &Box<[Job<T>]>) {
 		res
 	});
 	for job in jobs.iter().skip(warmup) {
-		println!("{}", job.invocation_latency as f64 / 1_000.0);
+		println!("{}", job);
 	}
 }
 

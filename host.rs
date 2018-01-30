@@ -169,10 +169,7 @@ fn handshake<'a>(_: &Box<[Job<FixedCString>]>, _: usize) -> Result<Comms<'a>, St
 
 	let mut pgroup = 0;
 	let them: Vec<_> = (0..ones).map(|count| {
-		let mem = SMem::new((AtomicBool::new(false), Job {
-			uservice_path: fixed_c_string(),
-			invocation_latency: 0,
-		})).unwrap_or_else(|msg| {
+		let mem = SMem::new((AtomicBool::new(false), Job::new(fixed_c_string()))).unwrap_or_else(|msg| {
 			eprintln!("Initializing shared memory: {}", msg);
 			exit(5);
 		});
