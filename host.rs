@@ -198,6 +198,7 @@ fn invoke(jobs: &mut Box<[Job<String>]>, comms: &SMem<i64>) -> Result<(), String
 
 		let ts = nsnow().unwrap();
 		let code = process.status().map_err(|msg| format!("{}: {}", job.uservice_path, msg))?;
+		job.completion_time = nsnow().unwrap() - ts;
 		job.invocation_latency = **comms - ts;
 
 		if ! code.success() {
@@ -228,6 +229,7 @@ fn invoke(jobs: &mut Box<[Job<String>]>, comms: &mut Comms) -> Result<(), String
 		let sta = nsnow().unwrap();
 		me.send_to(().bytes(), &addr).map_err(|err| format!("Sending to child {}: {}", job, err))?;
 		me.recv(fin.bytes()).map_err(|err| format!("Receiving from child {}: {}", job, err))?;
+		jobs[job].completion_time = nsnow().unwrap() - sta;
 		jobs[job].invocation_latency = fin - sta;
 	}
 
@@ -251,6 +253,7 @@ fn invoke(jobs: &mut Box<[Job<FixedCString>]>, comms: &mut Comms) -> Result<(), 
 		let ts = nsnow().unwrap();
 		*task.0.get_mut() = true;
 		while task.0.load(Ordering::Relaxed) {}
+		jobs[job].completion_time = nsnow().unwrap() - ts;
 		jobs[job].invocation_latency = task.1.invocation_latency - ts;
 	}
 

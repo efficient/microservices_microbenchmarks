@@ -35,6 +35,7 @@ thread_local! {
 pub struct Job<T> {
 	pub uservice_path: T,
 	pub invocation_latency: i64,
+	pub completion_time: i64,
 }
 
 impl<T> Job<T> {
@@ -42,13 +43,14 @@ impl<T> Job<T> {
 		Job {
 			uservice_path: path,
 			invocation_latency: 0,
+			completion_time: 0,
 		}
 	}
 }
 
 impl<T> Display for Job<T> {
 	fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-		write!(f, "{}", self.invocation_latency as f64 / 1_000.0)
+		write!(f, "{} {}", self.invocation_latency as f64 / 1_000.0, self.completion_time as f64 / 1_000.0)
 	}
 }
 
