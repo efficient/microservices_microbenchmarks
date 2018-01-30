@@ -1,7 +1,8 @@
+use std::cell::Cell;
 use std::env::Args;
 
 const OBJS_PER_DIR: usize  = 10_000;
-const WARMUP_TRIALS: usize =  3_000;
+const WARMUP_TRIALS: usize =      0; // 0 means the number of distinct object files
 
 pub type FixedCString = [u8; 24];
 
@@ -21,6 +22,10 @@ pub fn as_fixed_c_string(content: &str) -> FixedCString {
 	container[content.len()] = b'\0';
 
 	container
+}
+
+thread_local! {
+	static WARMUP: Cell<usize> = Cell::new(WARMUP_TRIALS);
 }
 
 #[derive(Clone)]
@@ -43,13 +48,27 @@ pub fn joblist<T: Clone, F: Fn(&str) -> T>(svcnames: &mut F, numobjs: usize, num
 		_ => &multishot,
 	};
 
-	let jobs: Vec<_> = (0..numobjs).map(fun).cycle().take(numjobs + WARMUP_TRIALS).collect();
+	let warmup = WARMUP.with(|warmup| {
+		let mut res = warmup.take();
+		if res == 0 {
+			res = numobjs;
+		}
+		warmup.set(res);
+		res
+	});
+
+	let jobs: Vec<_> = (0..numobjs).map(fun).cycle().take(numjobs + warmup).collect();
 
 	jobs.into_boxed_slice()
 }
 
 pub fn printstats<T: Clone>(jobs: &Box<[Job<T>]>) {
-	for job in jobs.iter().skip(WARMUP_TRIALS) {
+	let warmup = WARMUP.with(|warmup| {
+		let res = warmup.take();
+		warmup.set(res);
+		res
+	});
+	for job in jobs.iter().skip(warmup) {
 		println!("{}", job.invocation_latency as f64 / 1_000.0);
 	}
 }
