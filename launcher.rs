@@ -13,6 +13,8 @@ use job::as_fixed_c_string;
 use job::joblist;
 use job::printstats;
 use runtime::LibFun;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::process::exit;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -53,26 +55,33 @@ fn main() {
 }
 
 fn invoke(job: &mut Job<FixedCString>, ts_before: bool) {
-	let ts = if ts_before {
-		nsnow().unwrap()
-	} else {
-		0
-	};
-	let fun = LibFun::new_from_ptr(job.uservice_path.as_ptr() as *const i8).unwrap_or_else(|or| {
-		eprintln!("{}", or);
-		exit(2);
-	});
-
-	if let Some(fin) = fun() {
-		job.invocation_latency = fin - ts;
-	} else {
-		eprintln!("While invoking microservice: child '");
-		for each in &job.uservice_path {
-			if *each == b'\0' {
-				break;
-			}
-			eprint!("{}", each);
-		}
-		eprintln!("' died or was killed");
+	thread_local! {
+		static MEMO: RefCell<HashMap<FixedCString, LibFun>> = RefCell::new(HashMap::new());
 	}
+
+	MEMO.with(|memo| {
+		let mut memo = memo.borrow_mut();
+		let fun = memo.entry(job.uservice_path).or_insert_with(|| LibFun::new_from_ptr(job.uservice_path.as_ptr() as *const i8).unwrap_or_else(|or| {
+			eprintln!("{}", or);
+			exit(2);
+		}));
+
+		let ts = if ts_before {
+			nsnow().unwrap()
+		} else {
+			0
+		};
+		if let Some(fin) = fun() {
+			job.invocation_latency = fin - ts;
+		} else {
+			eprintln!("While invoking microservice: child '");
+			for each in &job.uservice_path {
+				if *each == b'\0' {
+					break;
+				}
+				eprint!("{}", each);
+			}
+			eprintln!("' died or was killed");
+		}
+	});
 }
