@@ -34,7 +34,7 @@ pub struct Job<T> {
 	pub invocation_latency: i64,
 }
 
-pub fn joblist<T: Clone, F: Fn(&str) -> T>(svcnames: &mut F, numobjs: usize, numjobs: usize) -> Box<[Job<T>]> {
+pub fn joblist<T: Clone, F: Fn(&str) -> T>(svcnames: F, numobjs: usize, numjobs: usize) -> Box<[Job<T>]> {
 	let oneshot = |_| Job {
 		uservice_path: svcnames(""),
 		invocation_latency: 0,

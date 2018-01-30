@@ -42,7 +42,7 @@ fn main() {
 			}
 		}
 	} else {
-		let mut jobs = joblist(&mut |index| as_fixed_c_string(&format!("{}{}.so", svcname, index)), numobjs, numjobs);
+		let mut jobs = joblist(|index| as_fixed_c_string(&format!("{}{}.so", svcname, index)), numobjs, numjobs);
 
 		for job in &mut *jobs {
 			invoke(job, true);
@@ -59,7 +59,7 @@ fn invoke(job: &mut Job<FixedCString>, ts_before: bool) {
 		exit(2);
 	});
 
-	call(job, &|| fun(), ts_before);
+	call(job, || fun(), ts_before);
 }
 
 #[cfg(feature = "memoize_loaded")]
@@ -78,11 +78,11 @@ fn invoke(job: &mut Job<FixedCString>, ts_before: bool) {
 			exit(2);
 		}));
 
-		call(job, &|| fun(), ts_before);
+		call(job, || fun(), ts_before);
 	});
 }
 
-fn call<T: Fn() -> Option<i64>>(job: &mut Job<FixedCString>, fun: &T, ts_before: bool) {
+fn call<T: Fn() -> Option<i64>>(job: &mut Job<FixedCString>, fun: T, ts_before: bool) {
 	let ts = if ts_before {
 		nsnow().unwrap()
 	} else {

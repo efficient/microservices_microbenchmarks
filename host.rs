@@ -101,14 +101,14 @@ type Comms<'a> = RingBuffer<(Child, SMem<'a, (AtomicBool, Job<FixedCString>)>)>;
 pub fn joblist(svcname: &str, numobjs: usize, numjobs: usize) -> Box<[Job<String>]> {
 	use job::joblist;
 
-	joblist(&mut |index| format!("{}{}", svcname, index), numobjs, numjobs)
+	joblist(|index| format!("{}{}", svcname, index), numobjs, numjobs)
 }
 
 #[cfg(feature = "invoke_launcher")]
 pub fn joblist(svcname: &str, numobjs: usize, numjobs: usize) -> Box<[Job<FixedCString>]> {
 	use job::joblist;
 
-	joblist(&mut |index| {
+	joblist(|index| {
 		as_fixed_c_string(&format!("{}{}.so", svcname, index))
 	}, numobjs, numjobs)
 }
