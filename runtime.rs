@@ -11,7 +11,7 @@ use std::panic::catch_unwind;
 
 #[cfg(feature = "preserve_loaded")]
 const PRESERVE_LOADED_LIBS: bool = true;
-#[cfg(feature = "cleanup_loaded")]
+#[cfg(not(feature = "preserve_loaded"))]
 const PRESERVE_LOADED_LIBS: bool = false;
 
 pub struct LibFun {
@@ -106,6 +106,3 @@ extern "C" {
 	fn dl_load(exec: *mut LibFunny, sofile: *const c_char, preserve: bool) -> *const c_char;
 	fn dl_unload(exec: LibFunny);
 }
-
-#[cfg(not(any(feature = "preserve_loaded", feature = "cleanup_loaded")))]
-compile_error!("Must select an *_loaded personality via '--feature' or '--cfg feature='!");
