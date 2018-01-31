@@ -162,7 +162,7 @@ fn handshake(jobs: &Box<[Job<String>]>, nprocs: usize) -> Result<Comms, String> 
 }
 
 #[cfg(feature = "invoke_launcher")]
-fn handshake<'a>(_: &Box<[Job<FixedCString>]>, _: usize) -> Result<Comms<'a>, String> {
+fn handshake<'a>(_: &Box<[Job<FixedCString>]>, nlibs: usize) -> Result<Comms<'a>, String> {
 	let mut ones = 0;
 	USERVICE_MASK.with(|uservice_mask| {
 		ones = usize::from_str_radix(&uservice_mask.borrow()[2..], 16).unwrap().count_ones()
@@ -189,7 +189,7 @@ fn handshake<'a>(_: &Box<[Job<FixedCString>]>, _: usize) -> Result<Comms<'a>, St
 		(handle, mem)
 	}).collect();
 
-	Ok(RingBuffer::new(them.into_boxed_slice()))
+	Ok(RingBuffer::with_alignment(them.into_boxed_slice(), nlibs))
 }
 
 #[cfg(feature = "invoke_forkexec")]
