@@ -1,2 +1,2 @@
 [build]
-rustflags = ["-Funsafe-code"]
+rustflags = ["-Funsafe-code", "-L.."]

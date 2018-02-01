@@ -55,6 +55,9 @@ libipc.so: private LDLIBS += -lstatic=ipc
 libipc.so: private RUSTFLAGS += -L. --crate-type dylib -Cprefer-dynamic
 libipc.so: libipc.a
 
+libspc.so:
+	$(error IT ONLY MAKES SENSE TO BUILD libspc AS A STATIC LIBRARY)
+
 libtest.so: private RUSTFLAGS += -L. -Funsafe-code
 libtest.so: libbytes.rlib libspc.rlib time.rs
 
@@ -70,7 +73,7 @@ distclean: clean
 %/rlib:
 	cd $* && $(CARGO) rustc --release --no-default-features -- --crate-type rlib
 
-%/so:
+%/so: libspc.rlib
 	cd $* && $(CARGO) build --release
 
 %: %.rs
