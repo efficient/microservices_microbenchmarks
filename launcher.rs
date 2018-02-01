@@ -19,7 +19,7 @@ use std::sync::atomic::Ordering;
 use time::nsnow;
 
 fn main() {
-	let (svcname, numobjs, numjobs, _) = args("").unwrap_or_else(|(retcode, errmsg)| {
+	let (svcname, numobjs, numjobs, _, _) = args("").unwrap_or_else(|(retcode, errmsg)| {
 		println!("{}", errmsg);
 		exit(retcode);
 	});

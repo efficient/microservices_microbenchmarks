@@ -32,6 +32,7 @@ use pgroup::kill_at_exit;
 use pgroup::setpgid;
 #[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
 use ringbuf::RingBuffer;
+use std::cell::Cell;
 use std::cell::RefCell;
 use std::fmt::Display;
 use std::mem::replace;
@@ -54,11 +55,12 @@ use time::nsnow;
 const DEFAULT_USERVICE_MASK: &str = "0x4";
 
 thread_local! {
+	static ATTACH_STREAMS: Cell<bool> = Cell::new(false);
 	static USERVICE_MASK: RefCell<String> = RefCell::new(String::from(DEFAULT_USERVICE_MASK));
 }
 
 fn main() {
-	let (svcname, numobjs, numjobs, mut args) = args("[cpumask]").unwrap_or_else(|(retcode, errmsg)| {
+	let (svcname, numobjs, numjobs, attach_streams, mut args) = args("[cpumask]").unwrap_or_else(|(retcode, errmsg)| {
 		println!("{}", errmsg);
 		exit(retcode);
 	});
@@ -66,6 +68,7 @@ fn main() {
 		println!("<numfuns> may not be greater than <numtrials>");
 		exit(2);
 	}
+	ATTACH_STREAMS.with(|streams| streams.set(attach_streams));
 	if let Some(mask) = args.next() {
 		if &mask[0..2] != "0x" {
 			println!("[cpumask], if provided, must be a hex mask starting with '0x'");
@@ -86,7 +89,9 @@ fn main() {
 		exit(4);
 	}
 
-	printstats(&jobs);
+	if ! attach_streams {
+		printstats(&jobs);
+	}
 }
 
 #[cfg(not(any(feature = "invoke_forkexec", feature = "invoke_sendmsg", feature = "invoke_launcher")))]
@@ -275,11 +280,14 @@ fn process<T: Display>(path: &str, arg: T) -> Command {
 	USERVICE_MASK.with(|uservice_mask| process.arg(&*uservice_mask.borrow()));
 	process.arg(path).arg(format!("{}", arg));
 
-	if cfg!(debug_assertions) {
-		process.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-	} else {
-		process.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
-	};
+	process.stdin(Stdio::null());
+	if ! ATTACH_STREAMS.with(|attach_streams| attach_streams.get()) {
+		if cfg!(debug_assertions) {
+			process.stdout(Stdio::piped()).stderr(Stdio::piped());
+		} else {
+			process.stdout(Stdio::null()).stderr(Stdio::null());
+		}
+	}
 
 	process
 }
