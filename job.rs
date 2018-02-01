@@ -63,12 +63,8 @@ pub fn joblist<T: Clone, F: Fn(&str) -> T>(svcnames: F, numobjs: usize, numjobs:
 	};
 
 	let warmup = WARMUP.with(|warmup| {
-		let mut res = warmup.take();
-		if res == 0 {
-			res = numobjs;
-		}
-		warmup.set(res);
-		res
+		let res = warmup.get();
+		if res == 0 { numobjs } else { res }
 	});
 
 	let jobs: Vec<_> = (0..numobjs).map(fun).cycle().take(numjobs + warmup).collect();
@@ -78,9 +74,7 @@ pub fn joblist<T: Clone, F: Fn(&str) -> T>(svcnames: F, numobjs: usize, numjobs:
 
 pub fn printstats<T: Clone>(jobs: &Box<[Job<T>]>) {
 	let warmup = WARMUP.with(|warmup| {
-		let res = warmup.take();
-		warmup.set(res);
-		res
+		warmup.get()
 	});
 	for job in jobs.iter().skip(warmup) {
 		println!("{}", job);
