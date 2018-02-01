@@ -3,28 +3,63 @@ use std::env::Args;
 use std::fmt::Display;
 use std::fmt::Error;
 use std::fmt::Formatter;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::ops::Deref;
+use std::ops::DerefMut;
 
 const OBJS_PER_DIR: usize  = 10_000;
 const WARMUP_TRIALS: usize =      0; // 0 means the number of distinct object files
 
-pub type FixedCString = [u8; 24];
+#[derive(Clone)]
+pub struct FixedCString ([u8; 24]);
 
-pub fn fixed_c_string() -> FixedCString {
-	[0; 24]
+impl FixedCString {
+	pub fn new() -> Self {
+		FixedCString ([0; 24])
+	}
+
+	pub fn from(content: &str) -> Self {
+		let mut container = Self::new();
+
+		let content = content.as_bytes();
+		assert!(content.len() + 1 < container.len());
+
+		for index in 0..content.len() {
+			container[index] = content[index];
+		}
+		container[content.len()] = b'\0';
+
+		container
+	}
 }
 
-pub fn as_fixed_c_string(content: &str) -> FixedCString {
-	let mut container = fixed_c_string();
+impl Deref for FixedCString {
+	type Target = [u8];
 
-	let content = content.as_bytes();
-	assert!(content.len() + 1 < container.len());
-
-	for index in 0..content.len() {
-		container[index] = content[index];
+	fn deref(&self) -> &Self::Target {
+		&self.0
 	}
-	container[content.len()] = b'\0';
+}
 
-	container
+impl DerefMut for FixedCString {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
+}
+
+impl Eq for FixedCString {}
+
+impl Hash for FixedCString {
+	fn hash<T: Hasher>(&self, hasher: &mut T) {
+		(**self).hash(hasher)
+	}
+}
+
+impl PartialEq for FixedCString {
+	fn eq(&self, other: &Self) -> bool {
+		**self == **other
+	}
 }
 
 thread_local! {

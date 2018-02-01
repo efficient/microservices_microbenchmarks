@@ -20,10 +20,6 @@ use ipc::SMem;
 use job::FixedCString;
 use job::Job;
 use job::args;
-#[cfg(feature = "invoke_launcher")]
-use job::as_fixed_c_string;
-#[cfg(feature = "invoke_launcher")]
-use job::fixed_c_string;
 use job::printstats;
 use pgroup::exit;
 #[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
@@ -115,7 +111,7 @@ pub fn joblist(svcname: &str, numobjs: usize, numjobs: usize) -> Box<[Job<FixedC
 	use job::joblist;
 
 	joblist(|index| {
-		as_fixed_c_string(&format!("{}{}.so", svcname, index))
+		FixedCString::from(&format!("{}{}.so", svcname, index))
 	}, numobjs, numjobs)
 }
 
@@ -175,7 +171,7 @@ fn handshake<'a>(_: &Box<[Job<FixedCString>]>, nlibs: usize) -> Result<Comms<'a>
 
 	let mut pgroup = 0;
 	let them: Vec<_> = (0..ones).map(|count| {
-		let mem = SMem::new((AtomicBool::new(false), Job::new(fixed_c_string()))).unwrap_or_else(|msg| {
+		let mem = SMem::new((AtomicBool::new(false), Job::new(FixedCString::new()))).unwrap_or_else(|msg| {
 			eprintln!("Initializing shared memory: {}", msg);
 			exit(5);
 		});

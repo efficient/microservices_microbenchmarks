@@ -9,7 +9,6 @@ use ipc::SMem;
 use job::FixedCString;
 use job::Job;
 use job::args;
-use job::as_fixed_c_string;
 use job::joblist;
 use job::printstats;
 use runtime::LibFun;
@@ -42,7 +41,7 @@ fn main() {
 			}
 		}
 	} else {
-		let mut jobs = joblist(|index| as_fixed_c_string(&format!("{}{}.so", svcname, index)), numobjs, numjobs);
+		let mut jobs = joblist(|index| FixedCString::from(&format!("{}{}.so", svcname, index)), numobjs, numjobs);
 
 		for job in &mut *jobs {
 			invoke(job, true);
@@ -73,7 +72,7 @@ fn invoke(job: &mut Job<FixedCString>, ts_before: bool) {
 
 	MEMO.with(|memo| {
 		let mut memo = memo.borrow_mut();
-		let fun = memo.entry(job.uservice_path).or_insert_with(|| LibFun::new_from_ptr(job.uservice_path.as_ptr() as *const i8).unwrap_or_else(|or| {
+		let fun = memo.entry(job.uservice_path.clone()).or_insert_with(|| LibFun::new_from_ptr(job.uservice_path.as_ptr() as *const i8).unwrap_or_else(|or| {
 			eprintln!("{}", or);
 			exit(2);
 		}));
@@ -92,7 +91,7 @@ fn call<T: Fn() -> Option<i64>>(job: &mut Job<FixedCString>, fun: T, ts_before: 
 		job.invocation_latency = fin - ts;
 	} else {
 		eprintln!("While invoking microservice: child '");
-		for each in &job.uservice_path {
+		for each in &*job.uservice_path {
 			if *each == b'\0' {
 				break;
 			}
