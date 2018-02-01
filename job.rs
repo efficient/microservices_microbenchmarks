@@ -121,7 +121,7 @@ pub fn args(extra_usage: &str) -> Result<(String, usize, usize, bool, Args), (i3
 
 	let mut args = args();
 	let prog = args.next().unwrap_or(String::from("<program>"));
-	let usage = format!("USAGE: {} [-s] <svcname> [<numfuns> <numtrials>{}{}]", prog, if extra_usage.is_empty() { "" } else { " " }, extra_usage);
+	let usage = format!("USAGE: {} [-s] <svcname> [<numfuns> [numtrials{}{}]]", prog, if extra_usage.is_empty() { "" } else { " " }, extra_usage);
 
 	let streams = args.next().ok_or((1, usage.clone()))?;
 	let svcname;
@@ -137,7 +137,7 @@ pub fn args(extra_usage: &str) -> Result<(String, usize, usize, bool, Args), (i3
 		(
 			svcname,
 			numobjs.parse().or((Err((2, String::from("<numfuns>, if provided, must be a nonnegative integer")))))?,
-			args.next().unwrap_or(usage.clone()).parse().or(Err((2, String::from("<numtrials>, if provided, must be a nonnegative integer"))))?,
+			args.next().unwrap_or(numobjs).parse().or(Err((2, String::from("[numtrials], if provided, must be a nonnegative integer"))))?,
 			streams,
 			args,
 		)
