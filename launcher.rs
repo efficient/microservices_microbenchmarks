@@ -12,6 +12,7 @@ use job::args;
 use job::joblist;
 use job::printstats;
 use runtime::LibFun;
+use runtime::setup_preemption;
 use std::process::exit;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -22,29 +23,40 @@ fn main() {
 		println!("{}", errmsg);
 		exit(retcode);
 	});
-	if numjobs < numobjs {
-		println!("<numfuns> may not be greater than <numtrials>");
-		exit(2);
-	}
 
 	if let Ok(shmid) = svcname.parse() {
 		let mut job = SMem::from(shmid).unwrap_or_else(|msg| {
-			eprintln!("{}", msg);
+			eprintln!("Setting up shared memory: {}", msg);
 			exit(3);
 		});
+		let quantum = numobjs as i64;
+		let limit = if numjobs == 1 { i64::max_value() } else { numjobs as i64 * 1_000 };
 
+		let mut ts = nsnow().unwrap();
+		if quantum != 1 {
+			if let Err(or) = setup_preemption(quantum, limit, &ts) {
+				eprintln!("Setting up preemption: {}", or);
+				exit(4);
+			}
+		}
 		loop {
 			let &mut (ref mut ready, ref mut job): &mut (AtomicBool, _) = &mut *job;
 			if ready.load(Ordering::Relaxed) {
-				invoke(job, false);
+				invoke(job, &mut ts, false);
 				*ready.get_mut() = false;
 			}
 		}
 	} else {
+		if numjobs < numobjs {
+			println!("<numfuns> may not be greater than <numtrials>");
+			exit(2);
+		}
+
+		let mut ts = 0;
 		let mut jobs = joblist(|index| FixedCString::from(&format!("{}{}.so", svcname, index)), numobjs, numjobs);
 
 		for job in &mut *jobs {
-			invoke(job, true);
+			invoke(job, &mut ts, true);
 		}
 
 		printstats(&jobs);
@@ -52,17 +64,17 @@ fn main() {
 }
 
 #[cfg(not(feature = "memoize_loaded"))]
-fn invoke(job: &mut Job<FixedCString>, ts_before: bool) {
+fn invoke(job: &mut Job<FixedCString>, ts: &mut i64, ts_before: bool) {
 	let fun = LibFun::new_from_ptr(job.uservice_path.as_ptr() as *const i8).unwrap_or_else(|msg| {
 		eprintln!("{}", msg);
 		exit(2);
 	});
 
-	call(job, || fun(), ts_before);
+	call(job, ts, || fun(), ts_before);
 }
 
 #[cfg(feature = "memoize_loaded")]
-fn invoke(job: &mut Job<FixedCString>, ts_before: bool) {
+fn invoke(job: &mut Job<FixedCString>, ts: &mut i64, ts_before: bool) {
 	use std::cell::RefCell;
 	use std::collections::HashMap;
 
@@ -77,13 +89,14 @@ fn invoke(job: &mut Job<FixedCString>, ts_before: bool) {
 			exit(2);
 		}));
 
-		call(job, || fun(), ts_before);
+		call(job, ts, || fun(), ts_before);
 	});
 }
 
-fn call<T: Fn() -> Option<i64>>(job: &mut Job<FixedCString>, fun: T, ts_before: bool) {
+fn call<T: Fn() -> Option<i64>>(job: &mut Job<FixedCString>, ts: &mut i64, fun: T, ts_before: bool) {
+	*ts = nsnow().unwrap();
 	let ts = if ts_before {
-		nsnow().unwrap()
+		*ts
 	} else {
 		0
 	};
