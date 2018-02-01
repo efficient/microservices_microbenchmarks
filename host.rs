@@ -30,6 +30,7 @@ use pgroup::setpgid;
 use ringbuf::RingBuffer;
 use std::cell::Cell;
 use std::cell::RefCell;
+use std::env::Args;
 use std::fmt::Display;
 use std::mem::replace;
 #[cfg(feature = "invoke_sendmsg")]
@@ -50,13 +51,18 @@ use time::nsnow;
 
 const DEFAULT_USERVICE_MASK: &str = "0x4";
 
+#[cfg(not(feature = "invoke_launcher"))]
+const USAGE_EXTENDED: &str = "[cpumask]";
+#[cfg(feature = "invoke_launcher")]
+const USAGE_EXTENDED: &str = "[cpumask] [quantum] [limit]";
+
 thread_local! {
 	static ATTACH_STREAMS: Cell<bool> = Cell::new(false);
 	static USERVICE_MASK: RefCell<String> = RefCell::new(String::from(DEFAULT_USERVICE_MASK));
 }
 
 fn main() {
-	let (svcname, numobjs, numjobs, attach_streams, mut args) = args("[cpumask]").unwrap_or_else(|(retcode, errmsg)| {
+	let (svcname, numobjs, numjobs, attach_streams, mut args) = args(USAGE_EXTENDED).unwrap_or_else(|(retcode, errmsg)| {
 		println!("{}", errmsg);
 		exit(retcode);
 	});
@@ -75,7 +81,7 @@ fn main() {
 	}
 
 	let mut jobs = joblist(&svcname, numobjs, numjobs);
-	let mut comm_handles = handshake(&jobs, numobjs).unwrap_or_else(|msg| {
+	let mut comm_handles = handshake(&jobs, numobjs, &mut args).unwrap_or_else(|msg| {
 		eprintln!("During initialization: {}", msg);
 		exit(3);
 	});
@@ -116,12 +122,12 @@ pub fn joblist(svcname: &str, numobjs: usize, numjobs: usize) -> Box<[Job<FixedC
 }
 
 #[cfg(feature = "invoke_forkexec")]
-fn handshake<'a>(_: &Box<[Job<String>]>, _: usize) -> Result<SMem<'a, i64>, String> {
+fn handshake<'a>(_: &Box<[Job<String>]>, _: usize, _: &mut Args) -> Result<SMem<'a, i64>, String> {
 	SMem::new(0).map_err(|or| format!("Initializing shared memory: {}", or))
 }
 
 #[cfg(feature = "invoke_sendmsg")]
-fn handshake(jobs: &Box<[Job<String>]>, nprocs: usize) -> Result<Comms, String> {
+fn handshake(jobs: &Box<[Job<String>]>, nprocs: usize, _: &mut Args) -> Result<Comms, String> {
 	const BATCH_SIZE: usize = 100;
 
 	let socket = UdpSocket::bind("127.0.0.1:0").map_err(|or| format!("Initializing UDP socket: {}", or))?;
@@ -163,7 +169,7 @@ fn handshake(jobs: &Box<[Job<String>]>, nprocs: usize) -> Result<Comms, String> 
 }
 
 #[cfg(feature = "invoke_launcher")]
-fn handshake<'a>(_: &Box<[Job<FixedCString>]>, nlibs: usize) -> Result<Comms<'a>, String> {
+fn handshake<'a>(_: &Box<[Job<FixedCString>]>, nlibs: usize, args: &mut Args) -> Result<Comms<'a>, String> {
 	let mut ones = 0;
 	USERVICE_MASK.with(|uservice_mask| {
 		ones = usize::from_str_radix(&uservice_mask.borrow()[2..], 16).unwrap().count_ones()
@@ -177,6 +183,9 @@ fn handshake<'a>(_: &Box<[Job<FixedCString>]>, nlibs: usize) -> Result<Comms<'a>
 		});
 
 		let mut handle = process("./launcher", format!("{}", mem.id()));
+		for arg in args.take(2) {
+			handle.arg(arg);
+		}
 		handle.before_exec(move || setpgid(pgroup).map(|_| ()));
 		let handle = handle.spawn().unwrap_or_else(|msg| {
 			eprintln!("Spawning launcher process: {}", msg);
