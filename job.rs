@@ -12,11 +12,11 @@ const OBJS_PER_DIR: usize  = 10_000;
 const WARMUP_TRIALS: usize =      0; // 0 means the number of distinct object files
 
 #[derive(Clone)]
-pub struct FixedCString ([u8; 24]);
+pub struct FixedCString ([u8; 48]);
 
 impl FixedCString {
 	pub fn new() -> Self {
-		FixedCString ([0; 24])
+		FixedCString ([0; 48])
 	}
 
 	pub fn from(content: &str) -> Self {
