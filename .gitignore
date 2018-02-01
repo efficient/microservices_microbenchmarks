@@ -6,7 +6,9 @@
 /sigalrm_tput
 /test
 
+target/
 *.a
+*.lock
 *.o
 *.rlib
 *.so

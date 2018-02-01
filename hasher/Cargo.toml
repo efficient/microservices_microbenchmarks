@@ -1,0 +1,10 @@
+[package]
+name = "hasher"
+version = "0.0.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = ["no_mangle_main"]
+no_mangle_main = []

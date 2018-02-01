@@ -4,6 +4,7 @@ override LDFLAGS := $(LDFLAGS)
 override LDLIBS := $(LDLIBS)
 override RUSTFLAGS := $(if $(NOPTS),,-O) -g -Dwarnings $(RUSTFLAGS)
 
+CARGO := cargo
 RUSTC := rustc
 
 ifdef NOPTS
@@ -38,6 +39,9 @@ preempt: time_utils.h
 sigalrm_tput: private CPPFLAGS += -D_POSIX_C_SOURCE=199309L
 sigalrm_tput: time_utils.h
 
+shasum: private RUSTFLAGS += -Lhasher/target/release/deps
+shasum: hasher/rlib
+
 test: private RUSTFLAGS += -L. -Crpath -Funsafe-code
 test: libbytes.so libipc.so time.rs
 
@@ -57,10 +61,17 @@ libtest.so: libbytes.rlib libspc.rlib time.rs
 .PHONY: clean
 clean:
 	$(RM) $(filter-out $(shell grep -H ^/ $(shell git ls-files .gitignore '*/.gitignore') | sed 's/\.gitignore:\///'),$(shell git clean -nX | cut -d" " -f3-))
+	-rm -r $(shell git clean -ndX | cut -d" " -f3- | grep '/$$')
 
 .PHONY: distclean
-distclean:
+distclean: clean
 	git clean -fX
+
+%/rlib:
+	cd $* && $(CARGO) rustc --release --no-default-features -- --crate-type rlib
+
+%/so:
+	cd $* && $(CARGO) build --release
 
 %: %.rs
 	$(RUSTC) $(RUSTFLAGS) -Clink-args="$(LDFLAGS)" $< $(LDLIBS)
