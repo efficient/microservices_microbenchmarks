@@ -1,4 +1,4 @@
-override CPPFLAGS := $(CPPFLAGS)
+override CPPFLAGS := $(CPPFLAGS) -DNDEBUG
 override CFLAGS := $(if $(NOPTS),-Og,-O2) -g -std=c99 -Wall -Wextra -Werror $(CFLAGS)
 override LDFLAGS := $(LDFLAGS)
 override LDLIBS := $(LDLIBS)
@@ -46,6 +46,9 @@ test: private RUSTFLAGS += -L. -Crpath -Funsafe-code
 test: libbytes.so libipc.so time.rs
 
 ipc.o: private CPPFLAGS += -D_XOPEN_SOURCE
+
+runtime.o: private CPPFLAGS += -D_GNU_SOURCE
+runtime.o: time_utils.h
 
 libbytes.so: private RUSTFLAGS += --crate-type dylib -Cprefer-dynamic
 

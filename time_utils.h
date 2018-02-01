@@ -12,6 +12,7 @@ static inline long long nsnow(void) {
 	struct timespec stamp;
 	int failure = clock_gettime(CLOCK_REALTIME, &stamp);
 	assert(!failure);
+	(void) failure;
 	return ns(&stamp);
 }
 
@@ -19,6 +20,7 @@ static inline long long nscpu(void) {
 	struct timespec stamp;
 	int failure = clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &stamp);
 	assert(!failure);
+	(void) failure;
 	return ns(&stamp);
 }
 

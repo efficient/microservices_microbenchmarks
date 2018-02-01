@@ -1,5 +1,7 @@
+use std::cell::Cell;
 use std::ffi::CStr;
 use std::ffi::CString;
+use std::io::Error;
 use std::mem::transmute;
 use std::ops::Deref;
 use std::os::raw::c_char;
@@ -13,6 +15,20 @@ use std::panic::catch_unwind;
 const PRESERVE_LOADED_LIBS: bool = true;
 #[cfg(not(feature = "preserve_loaded"))]
 const PRESERVE_LOADED_LIBS: bool = false;
+
+thread_local! {
+	static PREEMPTIBLE: Cell<bool> = Cell::new(false);
+}
+
+pub fn setup_preemption(quantum_us: i64, limit_ns: i64, start_time: &i64) -> Result<(), String> {
+	if unsafe {
+		preempt_setup(quantum_us, limit_ns, PREEMPTIBLE.with(|preemptible| preemptible.as_ptr()), start_time, unwind as *const c_void)
+	} {
+		Ok(())
+	} else {
+		Err(format!("{}", Error::last_os_error()))
+	}
+}
 
 pub struct LibFun {
 	lib: *const c_void,
@@ -45,7 +61,13 @@ impl LibFun {
 			Ok(LibFun {
 				lib: exec.lib,
 				fun: Box::new(move || {
-					catch_unwind(fun).ok()?;
+					PREEMPTIBLE.with(|preemptible| {
+						preemptible.set(true);
+						let success = catch_unwind(fun);
+						preemptible.set(false);
+
+						success
+					}).ok()?;
 
 					Some(*sbox)
 				}),
@@ -103,6 +125,12 @@ struct LibFunny {
 
 #[link(name = "runtime")]
 extern "C" {
+	fn preempt_setup(quantum_us: c_long, limit_ns: c_long, enforcing: *const bool, checkpoint: *const c_long, punishment: *const c_void) -> bool;
+
 	fn dl_load(exec: *mut LibFunny, sofile: *const c_char, preserve: bool) -> *const c_char;
 	fn dl_unload(exec: LibFunny);
+}
+
+extern "C" fn unwind() {
+	panic!();
 }
