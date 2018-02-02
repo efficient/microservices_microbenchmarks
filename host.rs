@@ -26,6 +26,8 @@ use pgroup::exit;
 use pgroup::kill_at_exit;
 #[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
 use pgroup::setpgid;
+#[cfg(feature = "invoke_launcher")]
+use pgroup::term;
 #[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
 use ringbuf::RingBuffer;
 use std::cell::Cell;
@@ -270,7 +272,7 @@ fn invoke(jobs: &mut Box<[Job<FixedCString>]>, comms: &mut Comms) -> Result<(), 
 	}
 
 	for &mut (ref mut launcher, _) in &mut **comms {
-		launcher.kill().map_err(|err| format!("Killing child: {}", err))?;
+		term(launcher.id() as i32).map_err(|err| format!("Terminating child: {}", err))?;
 	}
 
 	for &mut (ref mut launcher, _) in &mut **comms {

@@ -7,6 +7,9 @@ use std::panic::PanicInfo;
 use std::panic::set_hook;
 use std::panic::take_hook;
 
+const SIGKILL: i32 = 9;
+const SIGTERM: i32 = 15;
+
 thread_local! {
 	static DEFAULT_HOOK: RefCell<Option<Box<Fn(&PanicInfo)>>> = RefCell::new(None);
 	static HOOK: RefCell<Box<Fn()>> = RefCell::new(Box::new(|| ()));
@@ -19,15 +22,17 @@ pub fn exit(code: i32) -> ! {
 	exit(code);
 }
 
-pub fn kill(id: i32) -> Result<()> {
-	const SIGKILL: i32 = 9;
+pub fn term(id: i32) -> Result<()> {
+	kill(id, SIGTERM)
+}
 
+fn kill(id: i32, sig: i32) -> Result<()> {
 	extern "C" {
 		fn kill(pid: c_int, sig: c_int) -> i32;
 	}
 
 	if unsafe {
-		kill(id, SIGKILL)
+		kill(id, sig)
 	} != 0 {
 		Err(Error::last_os_error())?
 	}
@@ -37,7 +42,7 @@ pub fn kill(id: i32) -> Result<()> {
 
 pub fn kill_at_exit(id: i32) {
 	HOOK.with(|hook| {
-		replace(&mut *hook.borrow_mut(), Box::new(move || kill(id).unwrap_or_else(|err| eprintln!("Failed to kill all child processes: {}", err))));
+		replace(&mut *hook.borrow_mut(), Box::new(move || kill(id, SIGKILL).unwrap_or_else(|err| eprintln!("Failed to kill all child processes: {}", err))));
 	});
 
 	DEFAULT_HOOK.with(|default_hook| {

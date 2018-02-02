@@ -10,6 +10,8 @@
 #include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <ucontext.h>
 
 struct libfunny {
@@ -31,22 +33,50 @@ static struct {
 	volatile long long limit;
 } preempt_conf;
 
+static struct {
+	long long last;
+	long long durations;
+	unsigned long count;
+} preempt_stat;
+
+static double preempt_mean_ns(void) {
+	return (double) preempt_stat.durations / preempt_stat.count;
+}
+
 static void sigalrm(int signum, siginfo_t *siginfo, void *sigctxt) {
 	(void) signum;
 	(void) siginfo;
 
+	int errnot = errno;
+	long long ts = nsnow();
+	errno = errnot;
+
+	++preempt_stat.count;
+	preempt_stat.durations += ts - preempt_stat.last;
+	preempt_stat.last = ts;
+
 	if(!*preempt_conf.enforcing)
 		return;
 
-	int errnot = errno;
-	if(nsnow() - *preempt_conf.checkpoint >= preempt_conf.limit) {
+	if(ts - *preempt_conf.checkpoint >= preempt_conf.limit) {
 		mcontext_t *ctx = &((ucontext_t *) sigctxt)->uc_mcontext;
 		long long *rsp = (long long *) ctx->gregs[REG_RSP];
 		--*rsp;
 		*rsp = ctx->gregs[REG_RIP];
 		ctx->gregs[REG_RIP] = (long long) preempt_conf.response;
 	}
-	errno = errnot;
+}
+
+static void sigterm(int signum) {
+	(void) signum;
+
+	sigset_t alrm;
+	sigemptyset(&alrm);
+	sigaddset(&alrm, SIGALRM);
+	sigprocmask(SIG_BLOCK, &alrm, NULL);
+
+	printf("\nQuantum: %f\n", preempt_mean_ns() / 1000.0);
+	exit(0);
 }
 
 bool preempt_setup(long quantum, long long limit, volatile const bool *enforcing, volatile const long long *checkpoint, void (*response)(void)) {
@@ -69,12 +99,18 @@ bool preempt_setup(long quantum, long long limit, volatile const bool *enforcing
 	if(sigaction(SIGALRM, &handler, NULL))
 		return false;
 
+	preempt_stat.last = nsnow();
+
 	struct itimerval interval = {
 		.it_value.tv_usec = quantum,
 		.it_interval.tv_usec = quantum,
 	};
 	if(setitimer(ITIMER_REAL, &interval, NULL))
 		return false;
+
+	handler.sa_flags = 0;
+	handler.sa_handler = sigterm;
+	sigaction(SIGTERM, &handler, NULL);
 
 	return true;
 }
