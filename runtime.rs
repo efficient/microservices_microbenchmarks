@@ -30,6 +30,12 @@ pub fn setup_preemption(quantum_us: i64, limit_ns: i64, start_time: &i64) -> Res
 	}
 }
 
+pub fn query_preemption() -> f64 {
+	unsafe {
+		preempt_mean_ns()
+	}
+}
+
 pub struct LibFun {
 	lib: *const c_void,
 	fun: Box<Fn() -> Option<i64>>,
@@ -126,6 +132,7 @@ struct LibFunny {
 #[link(name = "runtime")]
 extern "C" {
 	fn preempt_setup(quantum_us: c_long, limit_ns: c_long, enforcing: *const bool, checkpoint: *const c_long, punishment: *const c_void) -> bool;
+	fn preempt_mean_ns() -> f64;
 
 	fn dl_load(exec: *mut LibFunny, sofile: *const c_char, preserve: bool) -> *const c_char;
 	fn dl_unload(exec: LibFunny);

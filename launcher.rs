@@ -12,6 +12,7 @@ use job::args;
 use job::joblist;
 use job::printstats;
 use runtime::LibFun;
+use runtime::query_preemption;
 use runtime::setup_preemption;
 use std::process::exit;
 use std::sync::atomic::AtomicBool;
@@ -39,12 +40,16 @@ fn main() {
 				exit(4);
 			}
 		}
-		loop {
+		while query_preemption() == 0.0 {
 			let &mut (ref mut ready, ref mut job): &mut (AtomicBool, _) = &mut *job;
 			if ready.load(Ordering::Relaxed) {
 				invoke(job, &mut ts, false);
 				*ready.get_mut() = false;
 			}
+		}
+
+		if query_preemption() > 0.0 {
+			println!("\nQuantum: {}", query_preemption());
 		}
 	} else {
 		if numjobs < numobjs {

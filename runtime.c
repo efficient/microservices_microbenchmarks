@@ -11,7 +11,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <ucontext.h>
 
 struct libfunny {
@@ -34,14 +33,11 @@ static struct {
 } preempt_conf;
 
 static struct {
+	bool finished;
 	long long last;
 	long long durations;
 	unsigned long count;
 } preempt_stat;
-
-static double preempt_mean_ns(void) {
-	return (double) preempt_stat.durations / preempt_stat.count;
-}
 
 static void sigalrm(int signum, siginfo_t *siginfo, void *sigctxt) {
 	(void) signum;
@@ -69,14 +65,16 @@ static void sigalrm(int signum, siginfo_t *siginfo, void *sigctxt) {
 
 static void sigterm(int signum) {
 	(void) signum;
+	int errnot = errno;
 
 	sigset_t alrm;
 	sigemptyset(&alrm);
 	sigaddset(&alrm, SIGALRM);
 	sigprocmask(SIG_BLOCK, &alrm, NULL);
 
-	printf("\nQuantum: %f\n", preempt_mean_ns() / 1000.0);
-	exit(0);
+	preempt_stat.finished = true;
+
+	errno = errnot;
 }
 
 bool preempt_setup(long quantum, long long limit, volatile const bool *enforcing, volatile const long long *checkpoint, void (*response)(void)) {
@@ -113,6 +111,17 @@ bool preempt_setup(long quantum, long long limit, volatile const bool *enforcing
 	sigaction(SIGTERM, &handler, NULL);
 
 	return true;
+}
+
+double preempt_mean_ns(void) {
+	if(preempt_stat.finished) {
+		if(preempt_stat.count)
+			return (double) preempt_stat.durations / preempt_stat.count / 1000;
+		else
+			return -1.0;
+	} else {
+		return 0.0;
+	}
 }
 
 const char *dl_load(struct libfunny *exec, const char *sofile, bool preserve) {
