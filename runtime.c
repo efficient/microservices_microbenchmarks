@@ -24,34 +24,36 @@ static const char *ENTRY_POINT = "main";
 static const char *STORAGE_LOC = "SBOX";
 
 uint8_t stack[BYTES_STACK];
-static volatile const bool *enforcing;
-static void (*response)(void);
-static volatile const long long *checkpoint;
-static volatile long long limit;
+static struct {
+	volatile const bool *enforcing;
+	void (*response)(void);
+	volatile const long long *checkpoint;
+	volatile long long limit;
+} preempt_conf;
 
 static void sigalrm(int signum, siginfo_t *siginfo, void *sigctxt) {
 	(void) signum;
 	(void) siginfo;
 
-	if(!*enforcing)
+	if(!*preempt_conf.enforcing)
 		return;
 
 	int errnot = errno;
-	if(nsnow() - *checkpoint >= limit) {
+	if(nsnow() - *preempt_conf.checkpoint >= preempt_conf.limit) {
 		mcontext_t *ctx = &((ucontext_t *) sigctxt)->uc_mcontext;
 		long long *rsp = (long long *) ctx->gregs[REG_RSP];
 		--*rsp;
 		*rsp = ctx->gregs[REG_RIP];
-		ctx->gregs[REG_RIP] = (long long) response;
+		ctx->gregs[REG_RIP] = (long long) preempt_conf.response;
 	}
 	errno = errnot;
 }
 
-bool preempt_setup(long quantum, long long limit_val, volatile const bool *enforcing_loc, volatile const long long *checkpoint_loc, void (*response_code)(void)) {
-	enforcing = enforcing_loc;
-	response = response_code;
-	checkpoint = checkpoint_loc;
-	limit = limit_val;
+bool preempt_setup(long quantum, long long limit, volatile const bool *enforcing, volatile const long long *checkpoint, void (*response)(void)) {
+	preempt_conf.enforcing = enforcing;
+	preempt_conf.response = response;
+	preempt_conf.checkpoint = checkpoint;
+	preempt_conf.limit = limit;
 
 	stack_t storage = {
 		.ss_sp = stack,
