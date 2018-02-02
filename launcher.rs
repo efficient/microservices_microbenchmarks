@@ -30,10 +30,10 @@ fn main() {
 			exit(3);
 		});
 		let quantum = numobjs as i64;
-		let limit = if numjobs == 1 { i64::max_value() } else { numjobs as i64 * 1_000 };
+		let limit = if numjobs == 0 { i64::max_value() } else { numjobs as i64 * 1_000 };
 
 		let mut ts = nsnow().unwrap();
-		if quantum != 1 {
+		if quantum != 0 {
 			if let Err(or) = setup_preemption(quantum, limit, &ts) {
 				eprintln!("Setting up preemption: {}", or);
 				exit(4);

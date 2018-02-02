@@ -32,6 +32,8 @@ use std::cell::Cell;
 use std::cell::RefCell;
 use std::env::Args;
 use std::fmt::Display;
+#[cfg(feature = "invoke_launcher")]
+use std::iter::repeat;
 use std::mem::replace;
 #[cfg(feature = "invoke_sendmsg")]
 use std::net::SocketAddr;
@@ -170,9 +172,8 @@ fn handshake(jobs: &Box<[Job<String>]>, nprocs: usize, _: &mut Args) -> Result<C
 
 #[cfg(feature = "invoke_launcher")]
 fn handshake<'a>(_: &Box<[Job<FixedCString>]>, nlibs: usize, args: &mut Args) -> Result<Comms<'a>, String> {
-	let mut ones = 0;
-	USERVICE_MASK.with(|uservice_mask| {
-		ones = usize::from_str_radix(&uservice_mask.borrow()[2..], 16).unwrap().count_ones()
+	let ones = USERVICE_MASK.with(|uservice_mask| {
+		usize::from_str_radix(&uservice_mask.borrow()[2..], 16).unwrap().count_ones()
 	});
 
 	let mut pgroup = 0;
@@ -183,7 +184,7 @@ fn handshake<'a>(_: &Box<[Job<FixedCString>]>, nlibs: usize, args: &mut Args) ->
 		});
 
 		let mut handle = process("./launcher", format!("{}", mem.id()));
-		for arg in args.take(2) {
+		for arg in args.chain(repeat(String::from("0"))).take(2) {
 			handle.arg(arg);
 		}
 		handle.before_exec(move || setpgid(pgroup).map(|_| ()));
