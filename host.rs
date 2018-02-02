@@ -273,9 +273,6 @@ fn invoke(jobs: &mut Box<[Job<FixedCString>]>, comms: &mut Comms) -> Result<(), 
 
 	for &mut (ref mut launcher, _) in &mut **comms {
 		term(launcher.id() as i32).map_err(|err| format!("Terminating child: {}", err))?;
-	}
-
-	for &mut (ref mut launcher, _) in &mut **comms {
 		launcher.wait().map_err(|err| format!("Waiting on child: {}", err))?;
 	}
 
