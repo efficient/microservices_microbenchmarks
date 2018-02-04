@@ -4,6 +4,7 @@ use std::ffi::CString;
 use std::io::Error;
 use std::mem::transmute;
 use std::ops::Deref;
+use std::ops::DerefMut;
 use std::os::raw::c_char;
 use std::os::raw::c_long;
 use std::os::raw::c_void;
@@ -47,7 +48,7 @@ pub fn query_preemption() -> Option<&'static [i64]> {
 
 pub struct LibFun {
 	lib: *const c_void,
-	fun: Box<Fn() -> Option<i64>>,
+	fun: Box<FnMut(i64) -> Option<i64>>,
 }
 
 impl LibFun {
@@ -75,7 +76,9 @@ impl LibFun {
 
 			Ok(LibFun {
 				lib: exec.lib,
-				fun: Box::new(move || {
+				fun: Box::new(move |sboxed| {
+					*sbox = sboxed;
+
 					PREEMPTIBLE.with(|preemptible| {
 						preemptible.set(true);
 						let success = catch_unwind(fun);
@@ -124,10 +127,16 @@ impl Drop for LibFun {
 }
 
 impl Deref for LibFun {
-	type Target = Fn() -> Option<i64>;
+	type Target = FnMut(i64) -> Option<i64>;
 
 	fn deref(&self) -> &Self::Target {
 		&*self.fun
+	}
+}
+
+impl DerefMut for LibFun {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut *self.fun
 	}
 }
 

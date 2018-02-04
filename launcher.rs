@@ -76,12 +76,12 @@ fn main() {
 
 #[cfg(not(feature = "memoize_loaded"))]
 fn invoke(job: &mut Job<FixedCString>, ts: &mut i64, ts_before: bool) {
-	let fun = LibFun::new_from_ptr(job.uservice_path.as_ptr() as *const i8).unwrap_or_else(|msg| {
+	let mut fun = LibFun::new_from_ptr(job.uservice_path.as_ptr() as *const i8).unwrap_or_else(|msg| {
 		eprintln!("{}", msg);
 		exit(2);
 	});
 
-	call(job, ts, &*fun, ts_before);
+	call(job, ts, &mut *fun, ts_before);
 }
 
 #[cfg(feature = "memoize_loaded")]
@@ -100,18 +100,18 @@ fn invoke(job: &mut Job<FixedCString>, ts: &mut i64, ts_before: bool) {
 			exit(2);
 		}));
 
-		call(job, ts, &**fun, ts_before);
+		call(job, ts, &mut **fun, ts_before);
 	});
 }
 
-fn call<T: Fn() -> Option<i64>>(job: &mut Job<FixedCString>, ts: &mut i64, fun: T, ts_before: bool) {
+fn call<T: FnMut(i64) -> Option<i64>>(job: &mut Job<FixedCString>, ts: &mut i64, mut fun: T, ts_before: bool) {
 	*ts = nsnow().unwrap();
 	let ts = if ts_before {
 		*ts
 	} else {
 		0
 	};
-	if let Some(fin) = fun() {
+	if let Some(fin) = fun(0) {
 		job.invocation_latency = fin - ts;
 	} else {
 		eprintln!("While invoking microservice: child '");
