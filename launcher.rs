@@ -75,7 +75,7 @@ fn invoke(job: &mut Job<FixedCString>, ts: &mut i64, ts_before: bool) {
 		exit(2);
 	});
 
-	call(job, ts, || fun(), ts_before);
+	call(job, ts, &*fun, ts_before);
 }
 
 #[cfg(feature = "memoize_loaded")]
@@ -94,7 +94,7 @@ fn invoke(job: &mut Job<FixedCString>, ts: &mut i64, ts_before: bool) {
 			exit(2);
 		}));
 
-		call(job, ts, || fun(), ts_before);
+		call(job, ts, &**fun, ts_before);
 	});
 }
 
