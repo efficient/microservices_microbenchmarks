@@ -107,7 +107,7 @@ pub fn joblist<T: Clone, F: Fn(&str) -> T>(svcnames: F, numobjs: usize, numjobs:
 	jobs.into_boxed_slice()
 }
 
-pub fn printstats<T: Clone>(jobs: &Box<[Job<T>]>) {
+pub fn printstats<T: Clone>(jobs: &[Job<T>]) {
 	let warmup = WARMUP.with(|warmup| {
 		warmup.get()
 	});

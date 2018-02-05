@@ -126,12 +126,12 @@ fn joblist(svcname: &str, numobjs: usize, numjobs: usize) -> Box<[Job<FixedCStri
 }
 
 #[cfg(feature = "invoke_forkexec")]
-fn handshake<'a>(_: &Box<[Job<String>]>, _: usize, _: &mut Args) -> Result<SMem<'a, i64>, String> {
+fn handshake<'a>(_: &[Job<String>], _: usize, _: &mut Args) -> Result<SMem<'a, i64>, String> {
 	SMem::new(0).map_err(|or| format!("Initializing shared memory: {}", or))
 }
 
 #[cfg(feature = "invoke_sendmsg")]
-fn handshake(jobs: &Box<[Job<String>]>, nprocs: usize, _: &mut Args) -> Result<Comms, String> {
+fn handshake(jobs: &[Job<String>], nprocs: usize, _: &mut Args) -> Result<Comms, String> {
 	const BATCH_SIZE: usize = 100;
 
 	let socket = UdpSocket::bind("127.0.0.1:0").map_err(|or| format!("Initializing UDP socket: {}", or))?;
@@ -173,7 +173,7 @@ fn handshake(jobs: &Box<[Job<String>]>, nprocs: usize, _: &mut Args) -> Result<C
 }
 
 #[cfg(feature = "invoke_launcher")]
-fn handshake<'a>(_: &Box<[Job<FixedCString>]>, nlibs: usize, args: &mut Args) -> Result<Comms<'a>, String> {
+fn handshake<'a>(_: &[Job<FixedCString>], nlibs: usize, args: &mut Args) -> Result<Comms<'a>, String> {
 	let ones = USERVICE_MASK.with(|uservice_mask| {
 		usize::from_str_radix(&uservice_mask.borrow()[2..], 16).unwrap().count_ones()
 	});
@@ -206,8 +206,8 @@ fn handshake<'a>(_: &Box<[Job<FixedCString>]>, nlibs: usize, args: &mut Args) ->
 }
 
 #[cfg(feature = "invoke_forkexec")]
-fn invoke(jobs: &mut Box<[Job<String>]>, comms: &SMem<i64>) -> Result<(), String> {
-	for job in &mut **jobs {
+fn invoke(jobs: &mut [Job<String>], comms: &SMem<i64>) -> Result<(), String> {
+	for job in &mut *jobs {
 		let mut process = process(&job.uservice_path, comms.id());
 
 		let ts = nsnow().unwrap();
@@ -233,7 +233,7 @@ fn invoke(jobs: &mut Box<[Job<String>]>, comms: &SMem<i64>) -> Result<(), String
 }
 
 #[cfg(feature = "invoke_sendmsg")]
-fn invoke(jobs: &mut Box<[Job<String>]>, comms: &mut Comms) -> Result<(), String> {
+fn invoke(jobs: &mut [Job<String>], comms: &mut Comms) -> Result<(), String> {
 	let &mut (ref me, ref mut them) = comms;
 
 	for job in 0..jobs.len() {
@@ -259,7 +259,7 @@ fn invoke(jobs: &mut Box<[Job<String>]>, comms: &mut Comms) -> Result<(), String
 }
 
 #[cfg(feature = "invoke_launcher")]
-fn invoke(jobs: &mut Box<[Job<FixedCString>]>, comms: &mut Comms) -> Result<(), String> {
+fn invoke(jobs: &mut [Job<FixedCString>], comms: &mut Comms) -> Result<(), String> {
 	for job in 0..jobs.len() {
 		let &mut (_, ref mut task) = &mut comms[job];
 		task.1 = jobs[job].clone();
