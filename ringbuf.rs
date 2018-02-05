@@ -13,6 +13,8 @@ impl<T> RingBuffer<T> {
 	}
 
 	pub fn with_alignment(buffer: Box<[T]>, alignment: usize) -> Self {
+		assert!(alignment >= buffer.len());
+
 		RingBuffer (buffer, alignment)
 	}
 }
