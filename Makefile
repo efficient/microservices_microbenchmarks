@@ -43,14 +43,12 @@ shasum: private RUSTFLAGS += -Lhasher/target/release/deps
 shasum: hasher/rlib
 
 test: private RUSTFLAGS += -L. -Crpath -Funsafe-code
-test: libbytes.so libipc.so time.rs
+test: libbytes.rlib libipc.so time.rs
 
 ipc.o: private CPPFLAGS += -D_XOPEN_SOURCE
 
 runtime.o: private CPPFLAGS += -D_GNU_SOURCE
 runtime.o: time_utils.h
-
-libbytes.so: private RUSTFLAGS += --crate-type dylib -Cprefer-dynamic
 
 libipc.rlib: libipc.a
 
@@ -58,11 +56,16 @@ libipc.so: private LDLIBS += -lstatic=ipc
 libipc.so: private RUSTFLAGS += -L. --crate-type dylib -Cprefer-dynamic
 libipc.so: libipc.a
 
-libspc.so:
-	$(error IT ONLY MAKES SENSE TO BUILD libspc AS A STATIC LIBRARY)
-
 libtest.so: private RUSTFLAGS += -L. -Funsafe-code
 libtest.so: libbytes.rlib libspc.rlib time.rs
+
+.PHONY: libbytes.so
+libbytes.so:
+	$(error IT ONLY MAKES SENSE TO BUILD libbytes AS A STATIC LIBRARY)
+
+.PHONY: libspc.so
+libspc.so:
+	$(error IT ONLY MAKES SENSE TO BUILD libspc AS A STATIC LIBRARY)
 
 .PHONY: clean
 clean:
