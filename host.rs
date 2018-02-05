@@ -85,12 +85,12 @@ fn main() {
 	}
 
 	let mut jobs = joblist(&svcname, numobjs, numjobs);
-	let mut comm_handles = handshake(&jobs, numobjs, &mut args).unwrap_or_else(|msg| {
+	let comm_handles = handshake(&jobs, numobjs, &mut args).unwrap_or_else(|msg| {
 		eprintln!("During initialization: {}", msg);
 		exit(3);
 	});
 
-	let tput = invoke(&mut jobs, &mut comm_handles).unwrap_or_else(|err| {
+	let tput = invoke(&mut jobs, comm_handles).unwrap_or_else(|err| {
 		eprintln!("While invoking microservice: {}", err);
 		exit(4);
 	});
@@ -107,7 +107,7 @@ compile_error!("Must select an invoke_* personality via '--feature' or '--cfg fe
 type Comms = (UdpSocket, RingBuffer<(Child, SocketAddr)>);
 
 #[cfg(feature = "invoke_launcher")]
-type Comms<'a> = RingBuffer<(Child, SMem<'a, (AtomicBool, Job<FixedCString>)>)>;
+type Comms<'a, 'b> = RingBuffer<(Child, Option<&'a mut Job<FixedCString>>, SMem<'b, (AtomicBool, Job<FixedCString>)>)>;
 
 #[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
 fn window() -> u32 {
@@ -180,7 +180,7 @@ fn handshake(jobs: &[Job<String>], nprocs: usize, _: &mut Args) -> Result<Comms,
 }
 
 #[cfg(feature = "invoke_launcher")]
-fn handshake<'a>(_: &[Job<FixedCString>], nlibs: usize, args: &mut Args) -> Result<Comms<'a>, String> {
+fn handshake<'a, 'b>(_: &[Job<FixedCString>], nlibs: usize, args: &mut Args) -> Result<Comms<'a, 'b>, String> {
 	let ones = window();
 
 	let mut pgroup = 0;
@@ -204,21 +204,21 @@ fn handshake<'a>(_: &[Job<FixedCString>], nlibs: usize, args: &mut Args) -> Resu
 			kill_at_exit(-(pgroup as i32));
 		}
 
-		(handle, mem)
+		(handle, None, mem)
 	}).collect();
 
 	Ok(RingBuffer::with_alignment(them.into_boxed_slice(), nlibs))
 }
 
 #[cfg(feature = "invoke_forkexec")]
-fn invoke(jobs: &mut [Job<String>], comms: &SMem<i64>) -> Result<f64, String> {
+fn invoke(jobs: &mut [Job<String>], comms: SMem<i64>) -> Result<f64, String> {
 	for job in &mut *jobs {
 		let mut process = process(&job.uservice_path, comms.id());
 
 		let ts = nsnow().unwrap();
 		let code = process.status().map_err(|msg| format!("{}: {}", job.uservice_path, msg))?;
 		job.completion_time = nsnow().unwrap() - ts;
-		job.invocation_latency = **comms - ts;
+		job.invocation_latency = *comms - ts;
 
 		if ! code.success() {
 			Err(if cfg!(debug_assertions) {
@@ -238,10 +238,10 @@ fn invoke(jobs: &mut [Job<String>], comms: &SMem<i64>) -> Result<f64, String> {
 }
 
 #[cfg(feature = "invoke_sendmsg")]
-fn invoke(jobs: &mut [Job<String>], comms: &mut Comms) -> Result<f64, String> {
+fn invoke(jobs: &mut [Job<String>], comms: Comms) -> Result<f64, String> {
 	use std::io::ErrorKind;
 
-	let &mut (ref me, ref mut them) = comms;
+	let (me, mut them) = comms;
 	me.set_nonblocking(true).map_err(|or| format!("Switching to nonblocking: {}", or))?;
 
 	let window = window();
@@ -283,11 +283,11 @@ fn invoke(jobs: &mut [Job<String>], comms: &mut Comms) -> Result<f64, String> {
 	}
 	let duration = nsnow().unwrap() - ts;
 
-	for &mut (ref mut child, _) in &mut **them {
+	for &mut (ref mut child, _) in &mut *them {
 		child.kill().map_err(|err| format!("Killing child: {}", err))?;
 	}
 
-	for &mut (ref mut child, _) in &mut **them {
+	for &mut (ref mut child, _) in &mut *them {
 		child.wait().map_err(|err| format!("Waiting on child: {}", err))?;
 	}
 
@@ -295,19 +295,37 @@ fn invoke(jobs: &mut [Job<String>], comms: &mut Comms) -> Result<f64, String> {
 }
 
 #[cfg(feature = "invoke_launcher")]
-fn invoke(jobs: &mut [Job<FixedCString>], comms: &mut Comms) -> Result<f64, String> {
-	for job in 0..jobs.len() {
-		let &mut (_, ref mut task) = &mut comms[job];
-		task.1 = jobs[job].clone();
+fn invoke<'a, 'b>(jobs: &'a mut [Job<FixedCString>], mut comms: Comms<'a, 'b>) -> Result<f64, String> {
+	let len = jobs.len();
+	let mut jobs = jobs.iter_mut();
+	let mut finished = 0;
 
-		let ts = nsnow().unwrap();
-		*task.0.get_mut() = true;
-		while task.0.load(Ordering::Relaxed) {}
-		jobs[job].completion_time = nsnow().unwrap() - ts;
-		jobs[job].invocation_latency = task.1.invocation_latency - ts;
+	while finished < len {
+		for &mut (_, ref mut job, ref mut region) in comms.iter_mut() {
+			let &mut (ref mut running, ref task) = &mut **region;
+
+			if ! running.load(Ordering::Relaxed) {
+				if let &mut Some(ref mut job) = job {
+					job.completion_time = nsnow().unwrap() - job.invocation_latency;
+					job.invocation_latency = task.invocation_latency - job.invocation_latency;
+					finished += 1;
+				}
+
+				*job = if let Some(job) = jobs.next() {
+					*task = job.clone();
+
+					job.invocation_latency = nsnow().unwrap();
+					*running.get_mut() = true;
+
+					Some(job)
+				} else {
+					None
+				};
+			}
+		}
 	}
 
-	for &mut (ref mut launcher, _) in &mut **comms {
+	for &mut (ref mut launcher, _, _) in &mut *comms {
 		term(launcher.id() as i32).map_err(|err| format!("Terminating child: {}", err))?;
 		launcher.wait().map_err(|err| format!("Waiting on child: {}", err))?;
 	}
