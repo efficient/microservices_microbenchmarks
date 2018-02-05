@@ -109,6 +109,13 @@ type Comms = (UdpSocket, RingBuffer<(Child, SocketAddr)>);
 #[cfg(feature = "invoke_launcher")]
 type Comms<'a> = RingBuffer<(Child, SMem<'a, (AtomicBool, Job<FixedCString>)>)>;
 
+#[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
+fn window() -> u32 {
+	USERVICE_MASK.with(|uservice_mask| {
+		usize::from_str_radix(&uservice_mask.borrow()[2..], 16)
+	}).unwrap().count_ones()
+}
+
 #[cfg(not(feature = "invoke_launcher"))]
 fn joblist(svcname: &str, numobjs: usize, numjobs: usize) -> Box<[Job<String>]> {
 	use job::joblist;
@@ -174,9 +181,7 @@ fn handshake(jobs: &[Job<String>], nprocs: usize, _: &mut Args) -> Result<Comms,
 
 #[cfg(feature = "invoke_launcher")]
 fn handshake<'a>(_: &[Job<FixedCString>], nlibs: usize, args: &mut Args) -> Result<Comms<'a>, String> {
-	let ones = USERVICE_MASK.with(|uservice_mask| {
-		usize::from_str_radix(&uservice_mask.borrow()[2..], 16).unwrap().count_ones()
-	});
+	let ones = window();
 
 	let mut pgroup = 0;
 	let them: Vec<_> = (0..ones).map(|count| {
@@ -234,17 +239,46 @@ fn invoke(jobs: &mut [Job<String>], comms: &SMem<i64>) -> Result<(), String> {
 
 #[cfg(feature = "invoke_sendmsg")]
 fn invoke(jobs: &mut [Job<String>], comms: &mut Comms) -> Result<(), String> {
+	use std::io::ErrorKind;
+
 	let &mut (ref me, ref mut them) = comms;
+	me.set_nonblocking(true).map_err(|or| format!("Switching to nonblocking: {}", or))?;
 
-	for job in 0..jobs.len() {
-		let (_, addr) = them[job];
+	let window = window();
+	let mut index = 0;
+	let mut inflight = 0;
+	let mut finished = 0;
 
-		let mut fin = 0i64;
-		let sta = nsnow().unwrap();
-		me.send_to(().bytes(), &addr).map_err(|err| format!("Sending to child {}: {}", job, err))?;
-		me.recv(fin.bytes()).map_err(|err| format!("Receiving from child {}: {}", job, err))?;
-		jobs[job].completion_time = nsnow().unwrap() - sta;
-		jobs[job].invocation_latency = fin - sta;
+	while finished < jobs.len() {
+		let mut fin = (0usize, 0i64);
+		match me.recv(fin.bytes()) {
+			Ok(len) => {
+				let ts = nsnow().unwrap();
+
+				debug_assert!(len == std::mem::size_of_val(&fin));
+				let (job, fin) = fin;
+				let job = &mut jobs[job];
+				job.completion_time = ts - job.invocation_latency;
+				job.invocation_latency = fin - job.invocation_latency;
+
+				inflight -= 1;
+				finished += 1;
+			},
+			Err(or) => if or.kind() != ErrorKind::WouldBlock {
+				Err(format!("Receiving from child: {}", or))?;
+			},
+		}
+
+		while inflight < window && index < jobs.len() {
+			let job = &mut jobs[index];
+			let &mut (_, addr) = &mut them[index];
+
+			job.invocation_latency = nsnow().unwrap();
+			me.send_to(index.bytes(), &addr).map_err(|or| format!("Sending to child {}: {}", index, or))?;
+
+			index += 1;
+			inflight += 1;
+		}
 	}
 
 	for &mut (ref mut child, _) in &mut **them {

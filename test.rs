@@ -34,10 +34,11 @@ pub fn main() {
 			socket.send_to(index.bytes(), &them).unwrap();
 
 			loop {
-				socket.recv(&mut []).unwrap();
+				let mut index = 0usize;
+				socket.recv(index.bytes()).unwrap();
 
-				let mut ts = nsnow().unwrap();
-				socket.send_to(ts.bytes(), &them).unwrap();
+				let mut mess = (index, nsnow().unwrap());
+				socket.send_to(mess.bytes(), &them).unwrap();
 			}
 		},
 	}
