@@ -7,7 +7,9 @@ pub struct RingBuffer<T> (Box<[T]>, usize);
 
 impl<T> RingBuffer<T> {
 	pub fn new(buffer: Box<[T]>) -> Self {
-		RingBuffer (buffer, 1)
+		let len = buffer.len();
+
+		RingBuffer (buffer, len)
 	}
 
 	pub fn with_alignment(buffer: Box<[T]>, alignment: usize) -> Self {
