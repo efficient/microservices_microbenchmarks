@@ -110,14 +110,14 @@ type Comms = (UdpSocket, RingBuffer<(Child, SocketAddr)>);
 type Comms<'a> = RingBuffer<(Child, SMem<'a, (AtomicBool, Job<FixedCString>)>)>;
 
 #[cfg(not(feature = "invoke_launcher"))]
-pub fn joblist(svcname: &str, numobjs: usize, numjobs: usize) -> Box<[Job<String>]> {
+fn joblist(svcname: &str, numobjs: usize, numjobs: usize) -> Box<[Job<String>]> {
 	use job::joblist;
 
 	joblist(|index| format!("{}{}", svcname, index), numobjs, numjobs)
 }
 
 #[cfg(feature = "invoke_launcher")]
-pub fn joblist(svcname: &str, numobjs: usize, numjobs: usize) -> Box<[Job<FixedCString>]> {
+fn joblist(svcname: &str, numobjs: usize, numjobs: usize) -> Box<[Job<FixedCString>]> {
 	use job::joblist;
 
 	joblist(|index| {
