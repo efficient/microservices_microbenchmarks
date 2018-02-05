@@ -90,13 +90,13 @@ fn main() {
 		exit(3);
 	});
 
-	if let Err(or) = invoke(&mut jobs, &mut comm_handles) {
-		eprintln!("While invoking microservice: {}", or);
+	let tput = invoke(&mut jobs, &mut comm_handles).unwrap_or_else(|err| {
+		eprintln!("While invoking microservice: {}", err);
 		exit(4);
-	}
+	});
 
 	if ! attach_streams {
-		printstats(&jobs);
+		printstats(&jobs, tput);
 	}
 }
 
@@ -211,7 +211,7 @@ fn handshake<'a>(_: &[Job<FixedCString>], nlibs: usize, args: &mut Args) -> Resu
 }
 
 #[cfg(feature = "invoke_forkexec")]
-fn invoke(jobs: &mut [Job<String>], comms: &SMem<i64>) -> Result<(), String> {
+fn invoke(jobs: &mut [Job<String>], comms: &SMem<i64>) -> Result<f64, String> {
 	for job in &mut *jobs {
 		let mut process = process(&job.uservice_path, comms.id());
 
@@ -234,11 +234,11 @@ fn invoke(jobs: &mut [Job<String>], comms: &SMem<i64>) -> Result<(), String> {
 		}
 	}
 
-	Ok(())
+	Ok(0.0)
 }
 
 #[cfg(feature = "invoke_sendmsg")]
-fn invoke(jobs: &mut [Job<String>], comms: &mut Comms) -> Result<(), String> {
+fn invoke(jobs: &mut [Job<String>], comms: &mut Comms) -> Result<f64, String> {
 	use std::io::ErrorKind;
 
 	let &mut (ref me, ref mut them) = comms;
@@ -249,6 +249,7 @@ fn invoke(jobs: &mut [Job<String>], comms: &mut Comms) -> Result<(), String> {
 	let mut inflight = 0;
 	let mut finished = 0;
 
+	let ts = nsnow().unwrap();
 	while finished < jobs.len() {
 		let mut fin = (0usize, 0i64);
 		match me.recv(fin.bytes()) {
@@ -280,6 +281,7 @@ fn invoke(jobs: &mut [Job<String>], comms: &mut Comms) -> Result<(), String> {
 			inflight += 1;
 		}
 	}
+	let duration = nsnow().unwrap() - ts;
 
 	for &mut (ref mut child, _) in &mut **them {
 		child.kill().map_err(|err| format!("Killing child: {}", err))?;
@@ -289,11 +291,11 @@ fn invoke(jobs: &mut [Job<String>], comms: &mut Comms) -> Result<(), String> {
 		child.wait().map_err(|err| format!("Waiting on child: {}", err))?;
 	}
 
-	Ok(())
+	Ok(1_000_000_000.0 * jobs.len() as f64 / duration as f64)
 }
 
 #[cfg(feature = "invoke_launcher")]
-fn invoke(jobs: &mut [Job<FixedCString>], comms: &mut Comms) -> Result<(), String> {
+fn invoke(jobs: &mut [Job<FixedCString>], comms: &mut Comms) -> Result<f64, String> {
 	for job in 0..jobs.len() {
 		let &mut (_, ref mut task) = &mut comms[job];
 		task.1 = jobs[job].clone();
@@ -310,7 +312,7 @@ fn invoke(jobs: &mut [Job<FixedCString>], comms: &mut Comms) -> Result<(), Strin
 		launcher.wait().map_err(|err| format!("Waiting on child: {}", err))?;
 	}
 
-	Ok(())
+	Ok(0.0)
 }
 
 fn process<T: Display>(path: &str, arg: T) -> Command {

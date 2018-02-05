@@ -112,12 +112,16 @@ pub fn joblist<T: Clone, F: Fn(&str) -> T>(svcnames: F, numobjs: usize, numjobs:
 	jobs.into_boxed_slice()
 }
 
-pub fn printstats<T: Clone>(jobs: &[Job<T>]) {
+pub fn printstats<T>(jobs: &[Job<T>], tput: f64) {
 	let warmup = WARMUP.with(|warmup| {
 		warmup.get()
 	});
 	for job in jobs.iter().skip(warmup) {
 		println!("{}", job);
+	}
+
+	if tput != 0.0 {
+		println!("\nThroughput: {}", tput);
 	}
 }
 

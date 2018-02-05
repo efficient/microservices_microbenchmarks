@@ -64,7 +64,7 @@ fn main() {
 			invoke(job, &mut ts, true);
 		}
 
-		printstats(&jobs);
+		printstats(&jobs, 0.0);
 	}
 }
 
