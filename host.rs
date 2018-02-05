@@ -5,7 +5,7 @@ mod bytes;
 mod ipc;
 #[cfg_attr(not(feature = "invoke_launcher"), allow(dead_code))]
 mod job;
-#[cfg_attr(not(feature = "invoke_sendmsg"), allow(dead_code))]
+#[allow(dead_code)]
 mod pgroup;
 #[allow(dead_code)]
 #[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
