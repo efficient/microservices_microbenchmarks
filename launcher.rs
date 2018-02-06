@@ -54,7 +54,7 @@ fn main() {
 
 		if preemptions.iter().any(|nonzero| *nonzero != 0) {
 			for preemption in preemptions {
-				println!("{}", *preemption as f64 / 1_000.0);
+				println!("{}", preemption.abs() as f64 / 1_000.0);
 			}
 		}
 	} else {
