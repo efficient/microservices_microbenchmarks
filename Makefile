@@ -59,14 +59,6 @@ libipc.so: libipc.a
 libtest.so: private RUSTFLAGS += -L. -Funsafe-code
 libtest.so: libbytes.rlib libspc.rlib time.rs
 
-.PHONY: libbytes.so
-libbytes.so:
-	$(error IT ONLY MAKES SENSE TO BUILD libbytes AS A STATIC LIBRARY)
-
-.PHONY: libspc.so
-libspc.so:
-	$(error IT ONLY MAKES SENSE TO BUILD libspc AS A STATIC LIBRARY)
-
 .PHONY: clean
 clean:
 	$(RM) $(filter-out $(shell grep -H ^/ $(shell git ls-files .gitignore '*/.gitignore') | sed 's/\.gitignore:\///'),$(shell git clean -nX | cut -d" " -f3-))
@@ -93,3 +85,8 @@ lib%.rlib: %.rs
 
 lib%.so: %.rs
 	$(RUSTC) --crate-type cdylib -Cprefer-dynamic --cfg 'feature="no_mangle_main"' $(RUSTFLAGS) -Clink-args="$(LDFLAGS)" $< $(LDLIBS)
+	@objdump -t $@ | grep '\<g\>.*\<F\>' >/dev/null 2>&1 || { \
+		echo "IT ONLY MAKES SENSE TO BUILD $(basename $@) AS A STATIC LIBRARY" >&2; \
+		rm $@; \
+		false; \
+	}
