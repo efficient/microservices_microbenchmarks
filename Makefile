@@ -54,6 +54,9 @@ libipc.so: private LDLIBS += -lstatic=ipc
 libipc.so: private RUSTFLAGS += -L. --crate-type dylib -Cprefer-dynamic
 libipc.so: libipc.a
 
+libsleep.so: private RUSTFLAGS += -L. -Funsafe-code
+libsleep.so: libspc.rlib time.rs
+
 libtest.so: private RUSTFLAGS += -L. -Funsafe-code
 libtest.so: libbytes.rlib libspc.rlib time.rs
 
