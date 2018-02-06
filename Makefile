@@ -50,8 +50,6 @@ ipc.o: private CPPFLAGS += -D_XOPEN_SOURCE
 runtime.o: private CPPFLAGS += -D_GNU_SOURCE
 runtime.o: time_utils.h
 
-libipc.rlib: libipc.a
-
 libipc.so: private LDLIBS += -lstatic=ipc
 libipc.so: private RUSTFLAGS += -L. --crate-type dylib
 libipc.so: libipc.a
