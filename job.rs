@@ -99,7 +99,12 @@ pub fn joblist<T: Clone, F: Fn(&str) -> T>(svcnames: F, numobjs: usize, numjobs:
 
 	let warmup = WARMUP.with(|warmup| {
 		let res = warmup.get();
-		if res == 0 { numobjs } else { res }
+		if res == 0 {
+			warmup.set(numobjs);
+			numobjs
+		} else {
+			res
+		}
 	});
 
 	let jobs: Vec<_> = (0..numobjs).map(fun).cycle().take(numjobs + warmup).collect();
