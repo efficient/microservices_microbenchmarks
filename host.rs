@@ -90,7 +90,7 @@ fn main() {
 		exit(3);
 	});
 
-	let tput = invoke(&mut jobs, comm_handles).unwrap_or_else(|err| {
+	let tput = invoke(&mut jobs, numobjs, comm_handles).unwrap_or_else(|err| {
 		eprintln!("While invoking microservice: {}", err);
 		exit(4);
 	});
@@ -180,7 +180,7 @@ fn handshake(jobs: &[Job<String>], nprocs: usize, _: &mut Args) -> Result<Comms,
 }
 
 #[cfg(feature = "invoke_launcher")]
-fn handshake<'a, 'b>(_: &[Job<FixedCString>], nlibs: usize, args: &mut Args) -> Result<Comms<'a, 'b>, String> {
+fn handshake<'a, 'b>(_: &[Job<FixedCString>], _: usize, args: &mut Args) -> Result<Comms<'a, 'b>, String> {
 	let ones = window();
 
 	let mut pgroup = 0;
@@ -207,11 +207,11 @@ fn handshake<'a, 'b>(_: &[Job<FixedCString>], nlibs: usize, args: &mut Args) -> 
 		(handle, None, mem)
 	}).collect();
 
-	Ok(RingBuffer::with_alignment(them.into_boxed_slice(), nlibs))
+	Ok(RingBuffer::new(them.into_boxed_slice()))
 }
 
 #[cfg(feature = "invoke_forkexec")]
-fn invoke(jobs: &mut [Job<String>], comms: SMem<i64>) -> Result<f64, String> {
+fn invoke(jobs: &mut [Job<String>], _: usize, comms: SMem<i64>) -> Result<f64, String> {
 	for job in &mut *jobs {
 		let mut process = process(&job.uservice_path, comms.id());
 
@@ -238,7 +238,7 @@ fn invoke(jobs: &mut [Job<String>], comms: SMem<i64>) -> Result<f64, String> {
 }
 
 #[cfg(feature = "invoke_sendmsg")]
-fn invoke(jobs: &mut [Job<String>], comms: Comms) -> Result<f64, String> {
+fn invoke(jobs: &mut [Job<String>], _: usize, comms: Comms) -> Result<f64, String> {
 	use std::io::ErrorKind;
 
 	let (me, mut them) = comms;
@@ -295,14 +295,25 @@ fn invoke(jobs: &mut [Job<String>], comms: Comms) -> Result<f64, String> {
 }
 
 #[cfg(feature = "invoke_launcher")]
-fn invoke<'a, 'b>(jobs: &'a mut [Job<FixedCString>], mut comms: Comms<'a, 'b>) -> Result<f64, String> {
-	let len = jobs.len();
+fn invoke<'a, 'b>(jobs: &'a mut [Job<FixedCString>], warmup: usize, mut comms: Comms<'a, 'b>) -> Result<f64, String> {
 	let mut jobs = jobs.iter_mut();
-	let mut finished = 0;
+	for job in jobs.by_ref().take(warmup) {
+		for &mut (_, _, ref mut task) in &mut *comms {
+			task.1 = job.clone();
 
-	while finished < len {
-		for &mut (_, ref mut job, ref mut region) in comms.iter_mut() {
-			let &mut (ref mut running, ref task) = &mut **region;
+			let ts = nsnow().unwrap();
+			*task.0.get_mut() = true;
+			while task.0.load(Ordering::Relaxed) {}
+			job.completion_time = nsnow().unwrap() - ts;
+			job.invocation_latency = task.1.invocation_latency - ts;
+		}
+	}
+
+	let nonwarmup = jobs.len();
+	let mut finished = 0;
+	while finished < nonwarmup {
+		for &mut (_, ref mut job, ref mut region) in &mut *comms {
+			let &mut (ref mut running, ref mut task) = &mut **region;
 
 			if ! running.load(Ordering::Relaxed) {
 				if let &mut Some(ref mut job) = job {
