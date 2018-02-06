@@ -49,5 +49,7 @@ pub fn main() {
 		recvt -= 0.min(cur - sor);
 	}
 
-	println!("{} {} {} {}", sends, recvs, sendt as f64 / sends as f64 / 1_000.0, recvt as f64 / recvs as f64 / 1_000.0);
+	println!("{} {} {} {}", sends, recvs,
+		if sends == 0 { 0.0 } else { sendt as f64 / sends as f64 / 1_000.0 },
+		if recvs == 0 { 0.0 } else { recvt as f64 / recvs as f64 / 1_000.0 });
 }
