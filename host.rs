@@ -315,6 +315,7 @@ fn invoke<'a, 'b>(jobs: &'a mut [Job<FixedCString>], warmup: usize, mut comms: C
 
 	let nonwarmup = jobs.len();
 	let mut finished = 0;
+	let mut duration = nsnow().unwrap();
 	while finished < nonwarmup {
 		for &mut (_, ref mut job, ref mut region) in &mut *comms {
 			let &mut (ref mut running, ref mut task) = &mut **region;
@@ -339,13 +340,14 @@ fn invoke<'a, 'b>(jobs: &'a mut [Job<FixedCString>], warmup: usize, mut comms: C
 			}
 		}
 	}
+	duration = nsnow().unwrap() - duration;
 
 	for &mut (ref mut launcher, _, _) in &mut *comms {
 		term(launcher.id() as i32).map_err(|err| format!("Terminating child: {}", err))?;
 		launcher.wait().map_err(|err| format!("Waiting on child: {}", err))?;
 	}
 
-	Ok(0.0)
+	Ok(1_000_000_000.0 * nonwarmup as f64 / duration as f64)
 }
 
 fn process<T: Display>(path: &str, arg: T) -> Command {
