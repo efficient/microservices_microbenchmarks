@@ -51,7 +51,7 @@ runtime.o: private CPPFLAGS += -D_GNU_SOURCE
 runtime.o: time_utils.h
 
 libipc.so: private LDLIBS += -lstatic=ipc
-libipc.so: private RUSTFLAGS += -L. --crate-type dylib
+libipc.so: private RUSTFLAGS += -L. --crate-type dylib -Cprefer-dynamic
 libipc.so: libipc.a
 
 libtest.so: private RUSTFLAGS += -L. -Funsafe-code
@@ -82,7 +82,7 @@ lib%.rlib: %.rs
 	$(RUSTC) --crate-type rlib --cfg 'feature="no_mangle_main"' $(RUSTFLAGS) -Clink-args="$(LDFLAGS)" $< $(LDLIBS)
 
 lib%.so: %.rs
-	$(RUSTC) --crate-type cdylib -Cprefer-dynamic --cfg 'feature="no_mangle_main"' $(RUSTFLAGS) -Clink-args="$(LDFLAGS)" $< $(LDLIBS)
+	$(RUSTC) --crate-type cdylib --cfg 'feature="no_mangle_main"' $(RUSTFLAGS) -Clink-args="$(LDFLAGS)" $< $(LDLIBS)
 	@objdump -t $@ | grep '\<g\>.*\<F\>' >/dev/null 2>&1 || { \
 		echo "IT ONLY MAKES SENSE TO BUILD $(basename $@) AS A STATIC LIBRARY" >&2; \
 		rm $@; \
