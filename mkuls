@@ -27,6 +27,7 @@ then
 	echo "OOPS: Failed to build recipe '$file'!" >&2
 	exit 3
 fi
+strip -g "$file"
 
 suffix="`printf %s "$file" | sed -n 's/.*\(\..\+\)/\1/p'`"
 libs="`ldd "$file" | sed -n "s:.*$PWD/./\([^ ]\+\).*:../../\1:p"`"
