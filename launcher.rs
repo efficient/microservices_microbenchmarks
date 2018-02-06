@@ -30,6 +30,7 @@ fn main() {
 			eprintln!("Setting up shared memory: {}", msg);
 			exit(3);
 		});
+		let (_, Job {completion_time: worker, ..}): (_, Job<_>) = *job;
 		let quantum = numobjs as i64;
 		let limit = if numjobs == 0 { i64::max_value() } else { numjobs as i64 * 1_000 };
 
@@ -44,7 +45,7 @@ fn main() {
 		while preemptions.is_none() {
 			let &mut (ref mut ready, ref mut job): &mut (AtomicBool, _) = &mut *job;
 			if ready.load(Ordering::Relaxed) {
-				invoke(job, &mut ts, false);
+				invoke(job, worker, &mut ts, false);
 				*ready.get_mut() = false;
 			}
 
@@ -67,7 +68,7 @@ fn main() {
 		let mut jobs = joblist(|index| FixedCString::from(&format!("{}{}.so", svcname, index)), numobjs, numjobs);
 
 		for job in &mut *jobs {
-			invoke(job, &mut ts, true);
+			invoke(job, 0, &mut ts, true);
 		}
 
 		printstats(&jobs, 0.0);
@@ -75,17 +76,17 @@ fn main() {
 }
 
 #[cfg(not(feature = "memoize_loaded"))]
-fn invoke(job: &mut Job<FixedCString>, ts: &mut i64, ts_before: bool) {
+fn invoke(job: &mut Job<FixedCString>, arg: i64, ts: &mut i64, ts_before: bool) {
 	let mut fun = LibFun::new_from_ptr(job.uservice_path.as_ptr() as *const i8).unwrap_or_else(|msg| {
 		eprintln!("{}", msg);
 		exit(2);
 	});
 
-	call(job, ts, &mut *fun, ts_before);
+	call(job, arg, ts, &mut *fun, ts_before);
 }
 
 #[cfg(feature = "memoize_loaded")]
-fn invoke(job: &mut Job<FixedCString>, ts: &mut i64, ts_before: bool) {
+fn invoke(job: &mut Job<FixedCString>, arg: i64, ts: &mut i64, ts_before: bool) {
 	use std::cell::RefCell;
 	use std::collections::HashMap;
 
@@ -100,18 +101,18 @@ fn invoke(job: &mut Job<FixedCString>, ts: &mut i64, ts_before: bool) {
 			exit(2);
 		}));
 
-		call(job, ts, &mut **fun, ts_before);
+		call(job, arg, ts, &mut **fun, ts_before);
 	});
 }
 
-fn call<T: FnMut(i64) -> Option<i64>>(job: &mut Job<FixedCString>, ts: &mut i64, mut fun: T, ts_before: bool) {
+fn call<T: FnMut(i64) -> Option<i64>>(job: &mut Job<FixedCString>, arg: i64, ts: &mut i64, mut fun: T, ts_before: bool) {
 	*ts = nsnow().unwrap();
 	let ts = if ts_before {
 		*ts
 	} else {
 		0
 	};
-	if let Some(fin) = fun(0) {
+	if let Some(fin) = fun(arg) {
 		job.invocation_latency = fin - ts;
 	} else {
 		eprintln!("While invoking microservice: child '");

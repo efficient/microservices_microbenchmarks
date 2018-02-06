@@ -184,8 +184,10 @@ fn handshake<'a, 'b>(_: &[Job<FixedCString>], _: usize, args: &mut Args) -> Resu
 	let ones = window();
 
 	let mut pgroup = 0;
-	let them: Vec<_> = (0..ones).map(|count| {
-		let mem = SMem::new((AtomicBool::new(false), Job::new(FixedCString::new()))).unwrap_or_else(|msg| {
+	let them: Vec<_> = (0..ones as i64).map(|count| {
+		let mut index = Job::new(FixedCString::new());
+		index.completion_time = count;
+		let mem = SMem::new((AtomicBool::new(false), index)).unwrap_or_else(|msg| {
 			eprintln!("Initializing shared memory: {}", msg);
 			exit(5);
 		});
