@@ -238,7 +238,7 @@ fn invoke(jobs: &mut [Job<String>], _: usize, comms: SMem<i64>) -> Result<f64, S
 }
 
 #[cfg(feature = "invoke_sendmsg")]
-fn invoke(jobs: &mut [Job<String>], _: usize, comms: Comms) -> Result<f64, String> {
+fn invoke(jobs: &mut [Job<String>], warmup: usize, comms: Comms) -> Result<f64, String> {
 	use std::io::ErrorKind;
 
 	let (me, mut them) = comms;
@@ -249,7 +249,7 @@ fn invoke(jobs: &mut [Job<String>], _: usize, comms: Comms) -> Result<f64, Strin
 	let mut inflight = 0;
 	let mut finished = 0;
 
-	let ts = nsnow().unwrap();
+	let mut duration = 0;
 	while finished < jobs.len() {
 		let mut fin = (0usize, 0i64);
 		match me.recv(fin.bytes()) {
@@ -271,6 +271,10 @@ fn invoke(jobs: &mut [Job<String>], _: usize, comms: Comms) -> Result<f64, Strin
 		}
 
 		while inflight < window && index < jobs.len() {
+			if index == warmup {
+				duration = nsnow().unwrap();
+			}
+
 			let job = &mut jobs[index];
 			let &mut (_, addr) = &mut them[index];
 
@@ -281,7 +285,7 @@ fn invoke(jobs: &mut [Job<String>], _: usize, comms: Comms) -> Result<f64, Strin
 			inflight += 1;
 		}
 	}
-	let duration = nsnow().unwrap() - ts;
+	duration = nsnow().unwrap() - duration;
 
 	for &mut (ref mut child, _) in &mut *them {
 		child.kill().map_err(|err| format!("Killing child: {}", err))?;
@@ -291,7 +295,7 @@ fn invoke(jobs: &mut [Job<String>], _: usize, comms: Comms) -> Result<f64, Strin
 		child.wait().map_err(|err| format!("Waiting on child: {}", err))?;
 	}
 
-	Ok(1_000_000_000.0 * jobs.len() as f64 / duration as f64)
+	Ok(1_000_000_000.0 * (jobs.len() - warmup) as f64 / duration as f64)
 }
 
 #[cfg(feature = "invoke_launcher")]
