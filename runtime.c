@@ -30,13 +30,14 @@ static struct {
 	void (*response)(void);
 	volatile const long long *checkpoint;
 	volatile long long limit;
+	long long quantum;
 } preempt_conf;
 
 static struct {
 	bool finished;
+	uint8_t offset;
 	long long last;
-	long long durations;
-	unsigned long count;
+	long long overages[1 << 8];
 } preempt_stat;
 
 static void sigalrm(int signum, siginfo_t *siginfo, void *sigctxt) {
@@ -47,8 +48,7 @@ static void sigalrm(int signum, siginfo_t *siginfo, void *sigctxt) {
 	long long ts = nsnow();
 	errno = errnot;
 
-	++preempt_stat.count;
-	preempt_stat.durations += ts - preempt_stat.last;
+	preempt_stat.overages[preempt_stat.offset++] = ts - preempt_stat.last - preempt_conf.quantum;
 	preempt_stat.last = ts;
 
 	if(!*preempt_conf.enforcing)
@@ -82,6 +82,7 @@ bool preempt_setup(long quantum, long long limit, volatile const bool *enforcing
 	preempt_conf.response = response;
 	preempt_conf.checkpoint = checkpoint;
 	preempt_conf.limit = limit;
+	preempt_conf.quantum = quantum * 1000;
 
 	stack_t storage = {
 		.ss_sp = stack,
@@ -113,15 +114,8 @@ bool preempt_setup(long quantum, long long limit, volatile const bool *enforcing
 	return true;
 }
 
-double preempt_mean_ns(void) {
-	if(preempt_stat.finished) {
-		if(preempt_stat.count)
-			return (double) preempt_stat.durations / preempt_stat.count / 1000;
-		else
-			return -1.0;
-	} else {
-		return 0.0;
-	}
+const long long *preempt_recent_ns(void) {
+	return preempt_stat.finished ? preempt_stat.overages : NULL;
 }
 
 const char *dl_load(struct libfunny *exec, const char *sofile, bool preserve) {

@@ -10,6 +10,7 @@ use std::os::raw::c_void;
 use std::ptr::null;
 use std::ptr::null_mut;
 use std::panic::catch_unwind;
+use std::slice;
 
 #[cfg(feature = "preserve_loaded")]
 const PRESERVE_LOADED_LIBS: bool = true;
@@ -30,9 +31,17 @@ pub fn setup_preemption(quantum_us: i64, limit_ns: i64, start_time: &i64) -> Res
 	}
 }
 
-pub fn query_preemption() -> f64 {
-	unsafe {
-		preempt_mean_ns()
+pub fn query_preemption() -> Option<&'static [i64]> {
+	let ptr = unsafe {
+		preempt_recent_ns()
+	};
+
+	if ! ptr.is_null() {
+		Some(unsafe {
+			slice::from_raw_parts(preempt_recent_ns(), 1 << 8)
+		})
+	} else {
+		None
 	}
 }
 
@@ -132,7 +141,7 @@ struct LibFunny {
 #[link(name = "runtime")]
 extern "C" {
 	fn preempt_setup(quantum_us: c_long, limit_ns: c_long, enforcing: *const bool, checkpoint: *const c_long, punishment: *const c_void) -> bool;
-	fn preempt_mean_ns() -> f64;
+	fn preempt_recent_ns() -> *const c_long;
 
 	fn dl_load(exec: *mut LibFunny, sofile: *const c_char, preserve: bool) -> *const c_char;
 	fn dl_unload(exec: LibFunny);

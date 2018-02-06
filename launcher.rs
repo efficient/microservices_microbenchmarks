@@ -40,16 +40,22 @@ fn main() {
 				exit(4);
 			}
 		}
-		while query_preemption() == 0.0 {
+		let mut preemptions = None;
+		while preemptions.is_none() {
 			let &mut (ref mut ready, ref mut job): &mut (AtomicBool, _) = &mut *job;
 			if ready.load(Ordering::Relaxed) {
 				invoke(job, &mut ts, false);
 				*ready.get_mut() = false;
 			}
-		}
 
-		if query_preemption() > 0.0 {
-			println!("\nQuantum: {}", query_preemption());
+			preemptions = query_preemption();
+		}
+		let preemptions = preemptions.unwrap();
+
+		if preemptions.iter().any(|nonzero| *nonzero != 0) {
+			for preemption in preemptions {
+				println!("{}", *preemption as f64 / 1_000.0);
+			}
 		}
 	} else {
 		if numjobs < numobjs {
