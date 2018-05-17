@@ -22,7 +22,7 @@ sh:
 
 host: private LDLIBS += -lstatic=ipc
 host: private RUSTFLAGS += -L. --cfg 'feature="invoke_$(INVOCATION)"'
-host: bytes.rs ipc.rs libipc.a job.rs pgroup.rs ringbuf.rs
+host: bytes.rs ipc.rs libipc.a job.rs pgroup.rs ringbuf.rs scoped.rs
 
 kill_tput: private CPPFLAGS += -D_POSIX_C_SOURCE=199309L
 kill_tput: time_utils.h
@@ -63,6 +63,9 @@ libsleep.so: libspc.rlib time.rs
 libtest.so: private RUSTFLAGS += -L. -Funsafe-code
 libtest.so: libbytes.rlib libspc.rlib time.rs
 
+scoped.rs: crossbeam-utils-0.3.2.crate
+	tar xOf $< --wildcards */src/$@ >$@
+
 .PHONY: clean
 clean:
 	$(RM) $(filter-out $(shell grep -H ^/ $(shell git ls-files .gitignore '*/.gitignore') | sed 's/\.gitignore:\///'),$(shell git clean -nX | cut -d" " -f3-))
@@ -80,6 +83,9 @@ distclean: clean
 
 %: %.rs
 	$(RUSTC) $(RUSTFLAGS) -Clink-args="$(LDFLAGS)" $< $(LDLIBS)
+
+crossbeam-utils-%.crate:
+	curl -L https://crates.io/api/v1/crates/crossbeam-utils/$*/download >$@
 
 lib%.a: %.o
 	$(AR) rs $@ $^
