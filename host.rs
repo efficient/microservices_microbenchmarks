@@ -10,6 +10,9 @@ mod pgroup;
 #[allow(dead_code)]
 #[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
 mod ringbuf;
+#[allow(dead_code)]
+#[cfg(feature = "invoke_forkexec")]
+mod scoped;
 mod time;
 
 #[cfg(feature = "invoke_sendmsg")]
@@ -109,7 +112,6 @@ type Comms = (UdpSocket, RingBuffer<(Child, SocketAddr)>);
 #[cfg(feature = "invoke_launcher")]
 type Comms<'a, 'b> = RingBuffer<(Child, Option<&'a mut Job<FixedCString>>, SMem<'b, (AtomicBool, Job<FixedCString>)>)>;
 
-#[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
 fn window() -> u32 {
 	USERVICE_MASK.with(|uservice_mask| {
 		usize::from_str_radix(&uservice_mask.borrow()[2..], 16)
@@ -133,8 +135,22 @@ fn joblist(svcname: &str, numobjs: usize, numjobs: usize) -> Box<[Job<FixedCStri
 }
 
 #[cfg(feature = "invoke_forkexec")]
-fn handshake<'a>(_: &[Job<String>], _: usize, _: &mut Args) -> Result<SMem<'a, i64>, String> {
-	SMem::new(0).map_err(|or| format!("Initializing shared memory: {}", or))
+fn handshake<'a>(_: &[Job<String>], _: usize, _: &mut Args) -> Result<Box<[SMem<'a, i64>]>, String> {
+	let mut maybe_comms = (0..window()).map(|_|
+		SMem::new(0).map_err(|or| format!("Initializing shared memory: {}", or))
+	);
+
+	let comms: Vec<_> = maybe_comms.by_ref().take_while(|each|
+		each.is_ok()
+	).map(|each|
+		each.unwrap()
+	).collect();
+
+	if let Some(error) = maybe_comms.next() {
+		error?;
+	}
+
+	Ok(comms.into_boxed_slice())
 }
 
 #[cfg(feature = "invoke_sendmsg")]
@@ -213,30 +229,74 @@ fn handshake<'a, 'b>(_: &[Job<FixedCString>], _: usize, args: &mut Args) -> Resu
 }
 
 #[cfg(feature = "invoke_forkexec")]
-fn invoke(jobs: &mut [Job<String>], _: usize, comms: SMem<i64>) -> Result<f64, String> {
-	for job in &mut *jobs {
-		let mut process = process(&job.uservice_path, comms.id());
+fn invoke(jobs: &mut [Job<String>], _: usize, comms: Box<[SMem<i64>]>) -> Result<f64, String> {
+	use scoped::ScopedJoinHandle;
+	use scoped::scope;
+	use std::collections::VecDeque;
 
-		let ts = nsnow().unwrap();
-		let code = process.status().map_err(|msg| format!("{}: {}", job.uservice_path, msg))?;
-		job.completion_time = nsnow().unwrap() - ts;
-		job.invocation_latency = *comms - ts;
-
-		if ! code.success() {
-			Err(if cfg!(debug_assertions) {
-				let (stdout, stderr) = process.output().map(|both| (
-					String::from_utf8_lossy(&both.stdout).into_owned(),
-					String::from_utf8_lossy(&both.stderr).into_owned(),
-				)).unwrap_or((String::new(), String::new()));
-
-				format!("Child '{}' died with {}\nChild's standard output:\nvvvvvvvvvvvvvvvvvvvvvvvv\n{}\n^^^^^^^^^^^^^^^^^^^^^^^^\nChild's standard error:\nvvvvvvvvvvvvvvvvvvvvvvv\n{}\n^^^^^^^^^^^^^^^^^^^^^^^", job.uservice_path, code, stdout, stderr)
-			} else {
-				format!("Child '{}' died with {} [snip]", job.uservice_path, code)
-			})?;
+	assert!(USERVICE_MASK.with(|uservice_mask| {
+		extern "C" {
+			fn getpid() -> u32;
 		}
-	}
 
-	Ok(0.0)
+		Command::new("taskset").arg("-p").arg(&*uservice_mask.borrow()).arg(format!("{}", unsafe {
+			getpid()
+		})).stdout(Stdio::null()).status().unwrap().success()
+	}));
+
+	scope(|scope| {
+		let chunks = jobs.len();
+		let ones = window() as usize;
+		let mut chunks = jobs.chunks_mut(chunks / ones).peekable();
+
+		debug_assert!(ones == comms.len());
+		let them: VecDeque<ScopedJoinHandle<Result<_, String>>> = comms.iter().map(|comms| {
+			let slice = chunks.next().unwrap();
+			let sliced;
+			if chunks.peek().map(|sliced| sliced.len() != slice.len()).unwrap_or(false) {
+				sliced = chunks.next();
+			} else {
+				sliced = None;
+			}
+			let slice = Some(slice);
+
+			scope.spawn(move || {
+				for slice in &mut [slice, sliced] {
+					if let &mut Some(ref mut slice) = slice {
+						for job in &mut **slice {
+							let mut process = process(&job.uservice_path, comms.id());
+
+							let ts = nsnow().unwrap();
+							let code = process.status().map_err(|msg| format!("{}: {}", job.uservice_path, msg))?;
+							job.completion_time = nsnow().unwrap() - ts;
+							job.invocation_latency = **comms - ts;
+
+							if ! code.success() {
+								Err(if cfg!(debug_assertions) {
+									let (stdout, stderr) = process.output().map(|both| (
+										String::from_utf8_lossy(&both.stdout).into_owned(),
+										String::from_utf8_lossy(&both.stderr).into_owned(),
+									)).unwrap_or((String::new(), String::new()));
+
+									format!("Child '{}' died with {}\nChild's standard output:\nvvvvvvvvvvvvvvvvvvvvvvvv\n{}\n^^^^^^^^^^^^^^^^^^^^^^^^\nChild's standard error:\nvvvvvvvvvvvvvvvvvvvvvvv\n{}\n^^^^^^^^^^^^^^^^^^^^^^^", job.uservice_path, code, stdout, stderr)
+								} else {
+									format!("Child '{}' died with {} [snip]", job.uservice_path, code)
+								})?;
+							}
+						}
+					}
+				}
+
+				Ok(())
+			})
+		}).collect();
+
+		for child in them {
+			child.join().unwrap()?;
+		}
+
+		Ok(0.0)
+	})
 }
 
 #[cfg(feature = "invoke_sendmsg")]
