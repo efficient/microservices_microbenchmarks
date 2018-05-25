@@ -69,5 +69,5 @@ fn sbox<'a>() -> Argument<SMem<'a, i64>> {
 fn sbox() -> Argument<&'static mut i64> {
 	use spc::sbox;
 
-	Argument::MutableReference(sbox())
+	Argument::MutableReference((sbox(), None))
 }
