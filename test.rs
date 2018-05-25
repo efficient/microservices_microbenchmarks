@@ -10,10 +10,11 @@ use bytes::Bytes;
 #[cfg(not(feature = "no_mangle_main"))]
 use ipc::SMem;
 use std::net::UdpSocket;
+use std::process::exit;
 use time::nsnow;
 
 enum Argument<T> {
-	MutableReference(T),
+	MutableReference((T, Option<i32>)),
 	#[cfg_attr(feature = "no_mangle_main", allow(dead_code))]
 	UnparseableString(String),
 }
@@ -22,7 +23,13 @@ enum Argument<T> {
 #[cfg_attr(feature = "no_mangle_main", no_mangle)]
 pub fn main() {
 	match sbox() {
-		Argument::MutableReference(mut loc) => *loc = nsnow().unwrap(),
+		Argument::MutableReference((mut loc, status)) => {
+			*loc = nsnow().unwrap();
+
+			if let Some(status) = status {
+				exit(status);
+			}
+		},
 		Argument::UnparseableString(addrs) => {
 			let mut addrs = addrs.split_whitespace();
 			let them = addrs.next().unwrap();
@@ -48,10 +55,11 @@ pub fn main() {
 fn sbox<'a>() -> Argument<SMem<'a, i64>> {
 	use std::env::args;
 
-	let s = args().skip(1).next().unwrap();
+	let mut args = args();
+	let s = args.by_ref().skip(1).next().unwrap();
 
 	if let Ok(u) = s.parse() {
-		Argument::MutableReference(SMem::from(u).unwrap())
+		Argument::MutableReference((SMem::from(u).unwrap(), args.next().map(|it| it.parse().unwrap())))
 	} else {
 		Argument::UnparseableString(s)
 	}
