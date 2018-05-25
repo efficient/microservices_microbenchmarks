@@ -85,7 +85,7 @@ distclean: clean
 	$(RUSTC) $(RUSTFLAGS) -Clink-args="$(LDFLAGS)" $< $(LDLIBS)
 
 crossbeam-utils-%.crate:
-	cp ~/.cargo/registry/cache/github.com-*/crossbeam-utils-$*.crate . || curl -L https://crates.io/api/v1/crates/crossbeam-utils/$*/download >$@
+	curl -L https://crates.io/api/v1/crates/crossbeam-utils/$*/download >$@
 
 lib%.a: %.o
 	$(AR) rs $@ $^
