@@ -22,7 +22,7 @@ sh:
 
 host: private LDLIBS += -lstatic=ipc
 host: private RUSTFLAGS += -L. --cfg 'feature="invoke_$(INVOCATION)"'
-host: bytes.rs ipc.rs libipc.a job.rs pgroup.rs ringbuf.rs scoped.rs
+host: bytes.rs ipc.rs libipc.a job.rs pgroup.rs libpgroup.a ringbuf.rs scoped.rs
 
 kill_tput: private CPPFLAGS += -D_POSIX_C_SOURCE=199309L
 kill_tput: time_utils.h

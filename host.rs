@@ -10,9 +10,6 @@ mod pgroup;
 #[allow(dead_code)]
 #[cfg(any(feature = "invoke_sendmsg", feature = "invoke_launcher"))]
 mod ringbuf;
-#[allow(dead_code)]
-#[cfg(feature = "invoke_forkexec")]
-mod scoped;
 mod time;
 
 #[cfg(feature = "invoke_sendmsg")]
@@ -229,74 +226,57 @@ fn handshake<'a, 'b>(_: &[Job<FixedCString>], _: usize, args: &mut Args) -> Resu
 }
 
 #[cfg(feature = "invoke_forkexec")]
-fn invoke(jobs: &mut [Job<String>], _: usize, comms: Box<[SMem<i64>]>) -> Result<f64, String> {
-	use scoped::ScopedJoinHandle;
-	use scoped::scope;
-	use std::collections::VecDeque;
+fn invoke(jobs: &mut [Job<String>], warmup: usize, comms: Box<[SMem<i64>]>) -> Result<f64, String> {
+	use pgroup::nowait;
 
-	assert!(USERVICE_MASK.with(|uservice_mask| {
-		extern "C" {
-			fn getpid() -> u32;
+	let window = window();
+	let mut index = 0;
+	let mut finished = 0;
+
+	debug_assert!(comms.len() == window as usize);
+	let mut comm_to_job = vec![usize::max_value(); comms.len()].into_boxed_slice();
+
+	let mut duration = 0;
+	while finished < jobs.len() {
+		if let Some(comm) = nowait().unwrap_or(None) {
+			let ts = nsnow().unwrap();
+			let comm = comm as usize;
+
+			debug_assert!(comm_to_job[comm] != usize::max_value());
+			let job = &mut jobs[comm_to_job[comm]];
+			comm_to_job[comm] = usize::max_value();
+
+			job.completion_time = ts - job.invocation_latency;
+			job.invocation_latency = *comms[comm] - job.invocation_latency;
+
+			finished += 1;
 		}
 
-		Command::new("taskset").arg("-p").arg(&*uservice_mask.borrow()).arg(format!("{}", unsafe {
-			getpid()
-		})).stdout(Stdio::null()).status().unwrap().success()
-	}));
-
-	scope(|scope| {
-		let chunks = jobs.len();
-		let ones = window() as usize;
-		let mut chunks = jobs.chunks_mut(chunks / ones).peekable();
-
-		debug_assert!(ones == comms.len());
-		let them: VecDeque<ScopedJoinHandle<Result<_, String>>> = comms.iter().map(|comms| {
-			let slice = chunks.next().unwrap();
-			let sliced;
-			if chunks.peek().map(|sliced| sliced.len() != slice.len()).unwrap_or(false) {
-				sliced = chunks.next();
-			} else {
-				sliced = None;
-			}
-			let slice = Some(slice);
-
-			scope.spawn(move || {
-				for slice in &mut [slice, sliced] {
-					if let &mut Some(ref mut slice) = slice {
-						for job in &mut **slice {
-							let mut process = process(&job.uservice_path, comms.id());
-
-							let ts = nsnow().unwrap();
-							let code = process.status().map_err(|msg| format!("{}: {}", job.uservice_path, msg))?;
-							job.completion_time = nsnow().unwrap() - ts;
-							job.invocation_latency = **comms - ts;
-
-							if ! code.success() {
-								Err(if cfg!(debug_assertions) {
-									let (stdout, stderr) = process.output().map(|both| (
-										String::from_utf8_lossy(&both.stdout).into_owned(),
-										String::from_utf8_lossy(&both.stderr).into_owned(),
-									)).unwrap_or((String::new(), String::new()));
-
-									format!("Child '{}' died with {}\nChild's standard output:\nvvvvvvvvvvvvvvvvvvvvvvvv\n{}\n^^^^^^^^^^^^^^^^^^^^^^^^\nChild's standard error:\nvvvvvvvvvvvvvvvvvvvvvvv\n{}\n^^^^^^^^^^^^^^^^^^^^^^^", job.uservice_path, code, stdout, stderr)
-								} else {
-									format!("Child '{}' died with {} [snip]", job.uservice_path, code)
-								})?;
-							}
-						}
-					}
+		while {
+			index < jobs.len() && if let Some(comm) = comm_to_job.iter().position(|it| *it == usize::max_value()) {
+				if index == warmup {
+					duration = nsnow().unwrap();
 				}
 
-				Ok(())
-			})
-		}).collect();
+				let job = &mut jobs[index];
+				debug_assert!(comm_to_job[comm] == usize::max_value());
+				comm_to_job[comm] = index;
 
-		for child in them {
-			child.join().unwrap()?;
-		}
+				let mut process = process(&job.uservice_path, comms[comm].id());
+				process.arg(&format!("{}", comm));
+				job.invocation_latency = nsnow().unwrap();
+				process.spawn().map_err(|or| format!("Spawning child {}: {}", index, or))?;
 
-		Ok(0.0)
-	})
+				index += 1;
+
+				true
+			} else {
+				false
+			}
+		} {}
+	}
+
+	Ok(1_000_000_000.0 * (jobs.len() - warmup) as f64 / duration as f64)
 }
 
 #[cfg(feature = "invoke_sendmsg")]

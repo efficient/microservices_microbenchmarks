@@ -9,6 +9,7 @@ use std::panic::take_hook;
 
 const SIGKILL: i32 = 9;
 const SIGTERM: i32 = 15;
+const WNOHANG: i32 = 1;
 
 thread_local! {
 	static DEFAULT_HOOK: RefCell<Option<Box<Fn(&PanicInfo)>>> = RefCell::new(None);
@@ -71,4 +72,29 @@ pub fn setpgid(gid: u32) -> Result<u32> {
 	}
 
 	Ok(id as u32)
+}
+
+pub fn nowait() -> Result<Option<i32>> {
+	#[link(name = "pgroup")]
+	extern "C" {
+		fn waitpid(pid: c_int, status: Option<&mut c_int>, opts: c_int) -> c_int;
+		fn wexitstatus(wstatus: Option<&mut c_int>) -> Option<&mut c_int>;
+	}
+
+	let mut status = 0;
+	let pid = unsafe {
+		waitpid(0, Some(&mut status), WNOHANG)
+	};
+
+	if pid == -1 {
+		Err(Error::last_os_error())?
+	}
+
+	Ok(if pid != 0 {
+		unsafe {
+			wexitstatus(Some(&mut status))
+		}
+	} else {
+		None
+	}.map(|status| *status))
 }
