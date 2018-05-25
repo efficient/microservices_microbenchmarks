@@ -6,10 +6,9 @@
 /sigalrm_tput
 /test
 
+target/
 *.a
-*.crate
 *.lock
 *.o
 *.rlib
 *.so
-scoped.rs
