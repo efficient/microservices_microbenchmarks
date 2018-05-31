@@ -1,9 +1,5 @@
 /host
-/kill_tput
 /launcher
-/minimal
-/preempt
-/sigalrm_tput
 /test
 
 target/
