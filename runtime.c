@@ -35,9 +35,9 @@ static struct {
 
 static struct {
 	bool finished;
-	uint8_t offset;
+	uint16_t offset;
 	long long last;
-	long long overages[1 << 8];
+	long long overages[1 << 16];
 } preempt_stat;
 
 static void sigalrm(int signum, siginfo_t *siginfo, void *sigctxt) {

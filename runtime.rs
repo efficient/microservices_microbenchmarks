@@ -39,7 +39,7 @@ pub fn query_preemption() -> Option<&'static [i64]> {
 
 	if ! ptr.is_null() {
 		Some(unsafe {
-			slice::from_raw_parts(preempt_recent_ns(), 1 << 8)
+			slice::from_raw_parts(preempt_recent_ns(), 1 << 16)
 		})
 	} else {
 		None
