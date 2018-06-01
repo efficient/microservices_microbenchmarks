@@ -1,0 +1,107 @@
+#!/bin/sh
+
+if [ $# -lt 2 ]
+then
+	echo "USAGE: $0 <iterations> <command> [args]..."
+	exit 1
+fi
+
+printf %s "Command:"
+printf " %s" "$0" "$@"
+echo
+printf %s "Revision: "
+git log --oneline --abbrev-commit --no-decorate -1
+printf %s "Kernel: "
+uname -a
+
+iters="$1"
+shift
+
+outputs=""
+for iter in `seq "$iters"`
+do
+	thisput="`"$@"`"
+	code="$?"
+	if [ "$code" -ne "0" ]
+	then
+		exit "$code"
+	fi
+	outputs="`cat <<-tuptou
+		$outputs
+		$thisput
+	tuptou`"
+done
+printf "%s\n" "$outputs"
+
+. ./experiments.sh
+
+removeline="`stats_first_line - <<-enilevomer
+	$outputs
+enilevomer`"
+outputs="`cat <<-tuptous | tail -n+2
+	$outputs
+tuptous`"
+if [ "$removeline" -gt "1" ]
+then
+	outputs="`cat <<-tuptous | sed "$((removeline - 2))q"
+		$outputs
+	tuptous`"
+fi
+noutput="`cat <<-tuptoun | wc -l
+	$outputs
+tuptoun`"
+stats="`cat <<-stats | head -n1 | sed 's/[^ ]\+//g' | wc -c
+	$outputs
+stats`"
+
+for field in `seq "$stats"`
+do
+	output="`cat <<-tuptou | cut -d" " -f"$field" | sort -n
+		$outputs
+	tuptou`"
+
+	total="`cat <<-naem | paste -sd+ | bc -l
+		$output
+	latot`"
+	mean="`printf "%s/%s\n" "$total" "$noutput" | bc -l`"
+
+	echo
+	printf "%s\n" "Count: $noutput"
+	printf "%s\n" "Sum: $total"
+	printf %s "Min: "
+	cat <<-tac | head -n1
+		$output
+	tac
+	printf %s "Max: "
+	cat <<-tac | tail -n1
+		$output
+	tac
+	printf "%s\n" "Mean: $mean"
+	printf %s "Median: "
+	cat <<-tac | tail -n+$((noutput / 2)) | head -n1
+		$output
+	tac
+	printf %s "Standard deviation: "
+	case "$mean" in
+	-*)
+		printf -- "%s\n" -1
+		;;
+	*)
+		cat <<-tac | sed "s:.*:(&-$mean)^2:" | paste -sd+ | sed "s:.*:sqrt((&)/$noutput):" | bc -l
+			$output
+		tac
+		;;
+	esac
+	printf %s "95% tail: "
+	cat <<-tac | tail -n+$((noutput * 95 / 100)) | head -n1
+		$output
+	tac
+	printf %s "99% tail: "
+	cat <<-tac | tail -n+$((noutput * 99 / 100)) | head -n1
+		$output
+	tac
+	printf %s "99.9% tail: "
+	cat <<-tac | tail -n+$((noutput * 999 / 1000)) | head -n1
+		$output
+	tac
+done

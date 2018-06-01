@@ -1,0 +1,118 @@
+#!/bin/sh
+
+if [ $# -le 3 ] || [ "$2" -le "0" ] || [ $# -lt $((3 + $2)) ]
+then
+	echo "USAGE: $0 <destdir> <numlists> <lists>... <command> [args]..."
+	exit 1
+fi
+destdir="$1"
+shift
+
+if ! mkdir "$destdir"
+then
+	echo "OOPS: Couldn't create destination directory '$destdir'" >&2
+	exit 2
+fi
+cat <<-tac >"$destdir/repeat"
+	#!/bin/sh
+
+	if [ \$# -ne 1 ]
+	then
+	$(printf "\t")echo "USAGE: \$0 <destdir>"
+	$(printf "\t")exit 1
+	fi
+
+	exec "$0" "\$1"$(printf " \"%s\"" "$@")
+tac
+chmod +x "$destdir/repeat"
+
+nlists="$1"
+shift
+for list in `seq "$nlists"`
+do
+	eval list_$list="'$1'"
+	shift
+done
+
+. ./experiments.sh
+
+done=""
+runs="1"
+times=""
+explore() {
+	local nfixed="$1"
+	shift
+
+	local fixed=""
+	local n
+	for n in `seq "$nfixed"`
+	do
+		fixed="$fixed $1"
+		shift
+	done
+	fixed="`tail -c+2 <<-dexif
+		$fixed
+	dexif`"
+
+	local nlist="$((nlists - nfixed))"
+	if [ "$nlist" -eq "0" ]
+	then
+		done="runs"
+
+		printf "%s\n" "RUN:$fixed"
+		echo ===
+
+		local filename="`sed 's/ /_/g' <<-lacol
+			$fixed
+		lacol`"
+		filename="$destdir/$filename.txt"
+
+		local err
+		err="`( time -p ./stats 1 "$@" $fixed 2>&1 >"$filename" || printf "\n%s\n" "ABORTING RUN" ) | tee /tmp/experimentprogress`"
+		if grep '^ABORTING RUN$' /tmp/experimentprogress >/dev/null
+		then
+			echo "Trial FAILED with exit status $status!"
+			cat <<-tac
+				$err
+			tac
+		else
+			local line="`stats_first_line "$filename"`"
+			tail -n"+$line" "$filename"
+		fi
+		echo
+
+		cp /tmp/experimentprogress "$filename.log"
+
+		local time="`tail -n3 <<-lacol | head -n1 | cut -d" " -f2 | cut -d. -f1
+			$err
+		lacol`"
+		times="`cat <<-semit
+			$times
+			$time
+		semit`"
+		local stats="`tail -n+2 <<-lacol | ./stats 1 cat
+			$times
+		`"
+		local run="`printf "%s\n" "$stats" | statistic 1 Count -`"
+		local ave="`printf "%s\n" "$stats" | statistic 1 Mean -`"
+		echo "`date`: Trial ($run/$runs) took $time s / Experiment has taken `printf "%s\n" "$stats" | statistic 1 Sum -` s / ETA in `echo "($runs - $run) * $ave" | bc -l | cut -d. -f1` s"
+
+		echo
+		echo
+		return
+	fi
+	eval local list="\"\$list_$nlist\""
+	if [ -z "$done" ]
+	then
+		runs=$((runs * `echo "$list" | sed 's/[^ ]\+//g' | wc -c`))
+	fi
+
+	local item
+	for item in $list
+	do
+		explore $((nfixed + 1)) $item $fixed "$@"
+	done
+}
+
+explore 0 "$@"
+rm -f /tmp/experimentprogress
