@@ -2,7 +2,7 @@ override CPPFLAGS := $(CPPFLAGS) -DNDEBUG
 override CFLAGS := $(if $(NOPTS),-Og,-O2) -g -std=c99 -Wall -Wextra -Werror $(CFLAGS)
 override LDFLAGS := $(LDFLAGS)
 override LDLIBS := $(LDLIBS)
-override RUSTFLAGS := $(if $(NOPTS),,-O) -g -Dwarnings $(RUSTFLAGS)
+override RUSTFLAGS := $(if $(NOPTS),,-O) -g $(RUSTFLAGS)
 
 CARGO := cargo
 RUSTC := rustc
